@@ -342,7 +342,6 @@ class _MindtPyAlgorithm:
             config.logger.info('Problem has no discrete decisions.')
 
             obj = next(m.component_data_objects(ctype=Objective, active=True))
-            
             if (
                 any(
                     c.body.polynomial_degree()
