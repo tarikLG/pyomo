@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 # ____________________________________________________________________________________
+
+"""Feasibility Pump strategy implementation for MindtPy."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -36,6 +38,7 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
     CONFIG = _get_MindtPy_FP_config()
 
     def check_config(self):
+        """Validate and enforce Feasibility Pump specific configuration."""
         # feasibility pump alone will lead to iteration_limit = 0, important!
         self.config.iteration_limit = 0
         self.config.move_objective = True
@@ -60,6 +63,21 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
+        """Add OA cuts for the current feasibility pump iterate.
+
+        Parameters
+        ----------
+        dual_values : list
+            Dual multipliers from the NLP subproblem.
+        linearize_active : bool, optional
+            Whether to linearize active nonlinear constraints.
+        linearize_violated : bool, optional
+            Whether to linearize violated nonlinear constraints.
+        cb_opt : SolverFactory, optional
+            Callback-capable persistent MIP optimizer.
+        nlp : Block, optional
+            NLP model used by strategies requiring model-specific cut data.
+        """
         add_oa_cuts(
             self.mip,
             dual_values,
@@ -75,4 +93,5 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
         )
 
     def MindtPy_iteration_loop(self):
+        """Run the Feasibility Pump iteration loop."""
         pass

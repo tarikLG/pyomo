@@ -31,8 +31,18 @@ from pyomo.common.collections import ComponentMap
 
 
 class OnlineDocExample(ConcreteModel):
+    """Compact MINLP example used in MindtPy online documentation tests."""
+
     def __init__(self, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'OnlineDocExample')
         super(OnlineDocExample, self).__init__(*args, **kwargs)
         m = self

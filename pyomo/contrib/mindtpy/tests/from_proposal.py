@@ -10,6 +10,7 @@
 # -*- coding: utf-8 -*-
 """
 See David Bernal PhD proposal example.
+
 Link: https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
 """
 
@@ -27,8 +28,18 @@ from pyomo.common.collections import ComponentMap
 
 
 class ProposalModel(ConcreteModel):
+    """MINLP test model from a MindtPy method proposal example."""
+
     def __init__(self, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'DavidProposalExample')
         super(ProposalModel, self).__init__(*args, **kwargs)
         m = self

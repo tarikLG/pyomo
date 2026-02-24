@@ -1,4 +1,6 @@
 # ____________________________________________________________________________________
+
+"""Test models and regression tests for MindtPy."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC

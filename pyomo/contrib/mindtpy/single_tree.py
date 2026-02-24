@@ -1,4 +1,6 @@
 # ____________________________________________________________________________________
+
+"""Single-tree callback machinery for MindtPy persistent MIP solvers."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -35,7 +37,8 @@ class LazyOACallback_cplex(
     def copy_lazy_var_list_values(
         self, opt, from_list, to_list, config, skip_stale=False, skip_fixed=True
     ):
-        """This function copies variable values from one list to another.
+        """Copy variable values from one list to another.
+
         Rounds to Binary/Integer if necessary.
         Sets to zero for NonNegativeReals if necessary.
 
@@ -78,7 +81,10 @@ class LazyOACallback_cplex(
         linearize_active=True,
         linearize_violated=True,
     ):
-        """Linearizes nonlinear constraints; add the OA cuts through CPLEX inherent function self.add()
+        """Add OA cuts through the CPLEX lazy-constraint callback.
+
+        Linearizes nonlinear constraints and adds OA cuts through CPLEX
+        inherent function ``self.add()``.
         For nonconvex problems, turn on 'config.add_slack'. Slack variables will always be used for
         nonlinear equality constraints.
 
@@ -429,7 +435,9 @@ class LazyOACallback_cplex(
             )
 
     def handle_lazy_main_feasible_solution(self, main_mip, mindtpy_solver, config, opt):
-        """This function is called during the branch and bound of main mip, more
+        """Handle a feasible master-MIP solution inside the lazy callback.
+
+        This function is called during the branch and bound of main mip, more
         exactly when a feasible solution is found and LazyCallback is activated.
         Copy the result to working model and update upper or lower bound.
         In LP-NLP, upper or lower bound are updated during solving the main problem.
@@ -469,7 +477,9 @@ class LazyOACallback_cplex(
         )
 
     def handle_lazy_subproblem_optimal(self, fixed_nlp, mindtpy_solver, config, opt):
-        """This function copies the optimal solution of the fixed NLP subproblem to the MIP
+        """Handle an optimal NLP subproblem solve inside the lazy callback.
+
+        This function copies the optimal solution of the fixed NLP subproblem to the MIP
         main problem(explanation see below), updates bound, adds OA and no-good cuts,
         stores incumbent solution if it has been improved.
 
@@ -620,7 +630,9 @@ class LazyOACallback_cplex(
     def handle_lazy_subproblem_other_termination(
         self, fixed_nlp, termination_condition, mindtpy_solver, config
     ):
-        """Handles the result of the latest iteration of solving the NLP subproblem given
+        """Handle non-optimal, non-infeasible NLP callback termination.
+
+        Handles the result of the latest iteration of solving the NLP subproblem given
         a solution that is neither optimal nor infeasible.
 
         Parameters
@@ -935,7 +947,9 @@ def LazyOACallback_gurobi(cb_m, cb_opt, cb_where, mindtpy_solver, config):
 
 
 def handle_lazy_main_feasible_solution_gurobi(cb_m, cb_opt, mindtpy_solver, config):
-    """This function is called during the branch and bound of main MIP problem,
+    """Handle a feasible Gurobi MIP solution in the lazy callback.
+
+    This function is called during the branch and bound of main MIP problem,
     more exactly when a feasible solution is found and LazyCallback is activated.
 
     Copy the solution to working model and update upper or lower bound.

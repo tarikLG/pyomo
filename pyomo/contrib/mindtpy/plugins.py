@@ -1,4 +1,6 @@
 # ____________________________________________________________________________________
+
+"""Plugin loader for registering MindtPy solver variants."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -9,6 +11,7 @@
 
 
 def load():
+    """Import MindtPy solver modules so their plugins are registered."""
     import pyomo.contrib.mindtpy.MindtPy
     import pyomo.contrib.mindtpy.outer_approximation
     import pyomo.contrib.mindtpy.extended_cutting_plane

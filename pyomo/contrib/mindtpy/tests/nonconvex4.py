@@ -34,8 +34,18 @@ from pyomo.common.collections import ComponentMap
 
 
 class Nonconvex4(ConcreteModel):
+    """Nonconvex MINLP benchmark problem D for MindtPy tests."""
+
     def __init__(self, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'Nonconvex4')
         super(Nonconvex4, self).__init__(*args, **kwargs)
         m = self
