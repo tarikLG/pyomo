@@ -1,6 +1,4 @@
 # ____________________________________________________________________________________
-
-"""Single-tree callback machinery for MindtPy persistent MIP solvers."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -8,6 +6,8 @@
 # Solutions of Sandia, LLC, the U.S. Government retains certain rights in this
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
+
+"""Single-tree callback machinery for MindtPy persistent MIP solvers."""
 
 from pyomo.common.dependencies import attempt_import
 from pyomo.solvers.plugins.solvers.gurobi_direct import gurobipy

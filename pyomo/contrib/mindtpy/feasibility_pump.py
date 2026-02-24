@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # ____________________________________________________________________________________
-
-"""Feasibility Pump strategy implementation for MindtPy."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -10,6 +8,8 @@
 # Solutions of Sandia, LLC, the U.S. Government retains certain rights in this
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
+
+"""Feasibility Pump strategy implementation for MindtPy."""
 
 import logging
 from pyomo.contrib.mindtpy.config_options import _get_MindtPy_FP_config

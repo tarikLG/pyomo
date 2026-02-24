@@ -1,6 +1,4 @@
 # ____________________________________________________________________________________
-
-"""Grey-box MINLP test model utilities for MindtPy test coverage."""
 #
 # Pyomo: Python Optimization Modeling Objects
 # Copyright (c) 2008-2026 National Technology and Engineering Solutions of Sandia, LLC
@@ -8,6 +6,8 @@
 # Solutions of Sandia, LLC, the U.S. Government retains certain rights in this
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
+
+"""Grey-box MINLP test model utilities for MindtPy test coverage."""
 
 from pyomo.common.dependencies import numpy as np
 import pyomo.common.dependencies.scipy.sparse as scipy_sparse
