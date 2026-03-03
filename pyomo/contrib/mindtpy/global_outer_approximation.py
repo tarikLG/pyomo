@@ -11,7 +11,6 @@
 
 """Global Outer Approximation strategy implementation for MindtPy."""
 
-
 from pyomo.contrib.gdpopt.util import get_main_elapsed_time
 from pyomo.core import ConstraintList
 from pyomo.opt import SolverFactory
