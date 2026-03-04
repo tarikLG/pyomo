@@ -133,6 +133,21 @@ class TestMindtPyGOAUnit(unittest.TestCase):
         self.assertTrue(solver.config.use_tabu_list)
         base.assert_called_once_with(solver)
 
+    def test_check_config_local_nlp_heuristic_disables_no_good_and_tabu(self):
+        """Verify local NLP heuristic mode disables no-good and tabu exclusions."""
+        solver = self._make_solver()
+        solver.config.local_nlp_heuristic = True
+        solver.config.nlp_solver = 'ipopt'
+        solver.config.add_no_good_cuts = True
+        solver.config.use_tabu_list = True
+
+        with patch.object(_MindtPyAlgorithm, 'check_config', autospec=True) as base:
+            solver.check_config()
+
+        self.assertFalse(solver.config.add_no_good_cuts)
+        self.assertFalse(solver.config.use_tabu_list)
+        base.assert_called_once_with(solver)
+
     def test_initialize_mip_problem_adds_affine_cut_list(self):
         """Verify GOA MIP initialization attaches the affine-cut container."""
         solver = self._make_solver()

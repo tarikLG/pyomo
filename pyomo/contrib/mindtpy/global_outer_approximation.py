@@ -44,8 +44,17 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
         config.use_mcpp = True
         config.equality_relaxation = False
         config.use_fbbt = True
-        # add_no_good_cuts is True by default in GOA
-        if not config.add_no_good_cuts and not config.use_tabu_list:
+        local_nlp_solver = config.nlp_solver in {'ipopt', 'appsi_ipopt', 'cyipopt'}
+        if config.local_nlp_heuristic and local_nlp_solver:
+            if config.add_no_good_cuts or config.use_tabu_list:
+                config.logger.info(
+                    'Disabling no-good cuts and tabu list because local_nlp_heuristic '
+                    'is enabled with a local NLP solver.'
+                )
+            config.add_no_good_cuts = False
+            config.use_tabu_list = False
+        elif not config.add_no_good_cuts and not config.use_tabu_list:
+            # add_no_good_cuts is True by default in GOA
             config.add_no_good_cuts = True
             config.use_tabu_list = False
         # Set default initialization_strategy

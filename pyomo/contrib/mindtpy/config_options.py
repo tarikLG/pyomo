@@ -246,6 +246,18 @@ def _add_goa_configs(CONFIG):
             'the integer variables (initial_binary).',
         ),
     )
+    CONFIG.declare(
+        'local_nlp_heuristic',
+        ConfigValue(
+            default=False,
+            domain=bool,
+            description='Allow GOA to run with local NLP subsolvers as a heuristic method.',
+            doc='When True, GOA can be used with local NLP solvers such as ipopt. '
+            'In this mode, GOA disables no-good cuts and tabu-list exclusions for local NLP '
+            'solvers to avoid excluding integer assignments based on locally optimal NLP '
+            'solutions.',
+        ),
+    )
 
 
 def _add_ecp_configs(CONFIG):
