@@ -7,6 +7,8 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
+"""Unit tests for MindtPy utility helpers."""
+
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.util import set_var_valid_value
 
@@ -18,7 +20,10 @@ from pyomo.contrib.mindtpy.util import add_var_bound
 
 
 class UnitTestMindtPy(unittest.TestCase):
+    """Unit tests for selected MindtPy helper functions."""
+
     def test_set_var_valid_value(self):
+        """Verify value coercion and bound handling for integer variables."""
         m = ConcreteModel()
         m.x1 = Var(within=Integers, bounds=(-1, 4), initialize=0)
 
@@ -68,6 +73,7 @@ class UnitTestMindtPy(unittest.TestCase):
         self.assertEqual(m.x1.value, 0)
 
     def test_add_var_bound(self):
+        """Verify default bounds are added when variable bounds are missing."""
         m = SimpleMINLP5().clone()
         m.x.lb = None
         m.x.ub = None

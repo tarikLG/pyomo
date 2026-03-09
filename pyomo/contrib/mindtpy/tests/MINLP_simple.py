@@ -46,7 +46,17 @@ class SimpleMINLP(ConcreteModel):
     """Convex MINLP problem Assignment 6 APSE."""
 
     def __init__(self, grey_box=False, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        grey_box : bool, optional
+            Whether to formulate the model using an external grey-box block.
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'SimpleMINLP')
         if grey_box and GreyBoxModel is None:
             m = None
@@ -99,6 +109,13 @@ class SimpleMINLP(ConcreteModel):
         else:
 
             def _model_i(b):
+                """Build the external grey-box block for this model.
+
+                Parameters
+                ----------
+                b : Block
+                    Block receiving the external grey-box declaration.
+                """
                 build_model_external(b)
 
             m.my_block = Block(rule=_model_i)
@@ -106,6 +123,13 @@ class SimpleMINLP(ConcreteModel):
             for i in m.I:
 
                 def eq_inputX(m):
+                    """Link continuous variable ``X[i]`` to grey-box input ``Xi``.
+
+                    Parameters
+                    ----------
+                    m : Block
+                        Model block used to build the linking constraint.
+                    """
                     return m.X[i] == m.my_block.egb.inputs["X" + str(i)]
 
                 con_name = "con_X_" + str(i)
@@ -114,6 +138,13 @@ class SimpleMINLP(ConcreteModel):
             for j in m.J:
 
                 def eq_inputY(m):
+                    """Link binary variable ``Y[j]`` to grey-box input ``Yj``.
+
+                    Parameters
+                    ----------
+                    m : Block
+                        Model block used to build the linking constraint.
+                    """
                     return m.Y[j] == m.my_block.egb.inputs["Y" + str(j)]
 
                 con_name = "con_Y_" + str(j)

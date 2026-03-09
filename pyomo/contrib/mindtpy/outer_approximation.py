@@ -9,6 +9,8 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
+"""Outer Approximation strategy implementation for MindtPy."""
+
 from pyomo.contrib.mindtpy.util import calc_jacobians
 from pyomo.core import ConstraintList
 from pyomo.opt import SolverFactory
@@ -38,6 +40,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
     CONFIG = _get_MindtPy_OA_config()
 
     def check_config(self):
+        """Validate and normalize OA-specific configuration values."""
         config = self.config
         if config.add_regularization is not None:
             if config.add_regularization in {
@@ -110,6 +113,21 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
+        """Add OA cuts (including grey-box cuts when present).
+
+        Parameters
+        ----------
+        dual_values : list
+            Dual multipliers from the NLP subproblem.
+        linearize_active : bool, optional
+            Whether to linearize active nonlinear constraints.
+        linearize_violated : bool, optional
+            Whether to linearize violated nonlinear constraints.
+        cb_opt : SolverFactory, optional
+            Callback-capable persistent MIP optimizer.
+        nlp : Block, optional
+            NLP model used to extract grey-box Jacobian data.
+        """
         add_oa_cuts(
             self.mip,
             dual_values,
@@ -129,6 +147,13 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
             )
 
     def deactivate_no_good_cuts_when_fixing_bound(self, no_good_cuts):
+        """Deactivate the most recent no-good cut when backtracking bounds.
+
+        Parameters
+        ----------
+        no_good_cuts : ConstraintList
+            No-good cut list stored on the master model.
+        """
         # Only deactivate the last OA cuts may not be correct.
         # Since integer solution may also be cut off by OA cuts due to calculation approximation.
         if self.config.add_no_good_cuts:
@@ -137,6 +162,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
             self.integer_list = self.integer_list[:-1]
 
     def objective_reformulation(self):
+        """Reformulate objective handling for OA variants and regularization."""
         # In the process_objective function, as long as the objective function is nonlinear, it will be reformulated and the variable/constraint/objective lists will be updated.
         # For OA/GOA/LP-NLP algorithm, if the objective function is linear, it will not be reformulated as epigraph constraint.
         # If the objective function is linear, it will be reformulated as epigraph constraint only if the Feasibility Pump or ROA/RLP-NLP algorithm is activated. (move_objective = True)

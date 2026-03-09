@@ -51,7 +51,17 @@ class EightProcessFlowsheet(ConcreteModel):
     """Flowsheet for the 8 process problem."""
 
     def __init__(self, convex=True, *args, **kwargs):
-        """Create the flowsheet."""
+        """Create the flowsheet.
+
+        Parameters
+        ----------
+        convex : bool, optional
+            Whether to use the convex variant of the benchmark model.
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'DuranEx3')
         super(EightProcessFlowsheet, self).__init__(*args, **kwargs)
         m = self

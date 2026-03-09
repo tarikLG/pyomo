@@ -38,8 +38,18 @@ from pyomo.common.collections import ComponentMap
 
 
 class SimpleMINLP4(ConcreteModel):
+    """Regularization-focused convex MINLP test instance."""
+
     def __init__(self, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'SimpleMINLP4')
         super(SimpleMINLP4, self).__init__(*args, **kwargs)
         m = self

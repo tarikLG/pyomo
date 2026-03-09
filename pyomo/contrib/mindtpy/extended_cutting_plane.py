@@ -9,6 +9,8 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
+"""Extended Cutting Plane strategy implementation for MindtPy."""
+
 from pyomo.contrib.gdpopt.util import time_code, get_main_elapsed_time
 from pyomo.contrib.mindtpy.util import calc_jacobians
 from pyomo.core import ConstraintList
@@ -69,6 +71,7 @@ class MindtPy_ECP_Solver(_MindtPyAlgorithm):
         )
 
     def check_config(self):
+        """Validate and normalize ECP-specific configuration values."""
         config = self.config
         # if ecp tolerance is not provided use bound tolerance
         if config.ecp_tolerance is None:
@@ -87,7 +90,9 @@ class MindtPy_ECP_Solver(_MindtPyAlgorithm):
         )
 
     def init_rNLP(self):
-        """Initialize the problem by solving the relaxed NLP and then store the optimal variable
+        """Initialize by solving the relaxed NLP and storing variable values.
+
+        Initialize the problem by solving the relaxed NLP and then store the optimal variable
         values obtained from solving the rNLP.
 
         Raises
@@ -125,6 +130,7 @@ class MindtPy_ECP_Solver(_MindtPyAlgorithm):
         )
 
     def all_nonlinear_constraint_satisfied(self):
+        """Return True when all nonlinear constraints satisfy ECP tolerance."""
         # check to see if the nonlinear constraints are satisfied
         config = self.config
         MindtPy = self.mip.MindtPy_utils

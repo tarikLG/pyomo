@@ -77,6 +77,15 @@ class TestMindtPy(unittest.TestCase):
     """Tests for the MindtPy solver plugin."""
 
     def check_optimal_solution(self, model, places=1):
+        """Assert that variable values match the model's known optimum.
+
+        Parameters
+        ----------
+        model : Block
+            Model containing ``optimal_solution`` values for comparison.
+        places : int, optional
+            Decimal places used by ``assertAlmostEqual``.
+        """
         for var in model.optimal_solution:
             self.assertAlmostEqual(
                 var.value, model.optimal_solution[var], places=places
@@ -109,6 +118,13 @@ class TestMindtPy(unittest.TestCase):
         with SolverFactory('mindtpy') as opt:
 
             def callback(model):
+                """Set binaries to a fixed pattern to induce cycling behavior.
+
+                Parameters
+                ----------
+                model : Block
+                    Model whose binary variables are modified before subproblem solve.
+                """
                 model.Y[1].value = 0
                 model.Y[2].value = 0
                 model.Y[3].value = 0
@@ -488,6 +504,7 @@ class TestMindtPy(unittest.TestCase):
                 self.check_optimal_solution(model)
 
     def test_iteration_limit(self):
+        """Verify solve completes when a tight iteration limit is imposed."""
         with SolverFactory('mindtpy') as opt:
             model = ConstraintQualificationExample()
             opt.solve(
@@ -500,6 +517,7 @@ class TestMindtPy(unittest.TestCase):
             # self.assertAlmostEqual(value(model.objective.expr), 3, places=2)
 
     def test_time_limit(self):
+        """Verify solve respects a short global time limit setting."""
         with SolverFactory('mindtpy') as opt:
             model = ConstraintQualificationExample()
             opt.solve(

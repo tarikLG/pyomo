@@ -9,6 +9,7 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
+"""Global Outer Approximation strategy implementation for MindtPy."""
 
 from pyomo.contrib.gdpopt.util import get_main_elapsed_time
 from pyomo.core import ConstraintList
@@ -37,6 +38,7 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
     CONFIG = _get_MindtPy_GOA_config()
 
     def check_config(self):
+        """Validate and normalize GOA-specific configuration values."""
         config = self.config
         config.add_slack = False
         config.use_mcpp = True
@@ -95,9 +97,31 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
+        """Add GOA affine cuts to the current master problem.
+
+        Parameters
+        ----------
+        dual_values : list, optional
+            Unused for GOA affine cuts.
+        linearize_active : bool, optional
+            Unused placeholder for shared strategy interface.
+        linearize_violated : bool, optional
+            Unused placeholder for shared strategy interface.
+        cb_opt : SolverFactory, optional
+            Unused callback optimizer for GOA affine cuts.
+        nlp : Block, optional
+            Unused NLP model placeholder.
+        """
         add_affine_cuts(self.mip, self.config, self.timing)
 
     def deactivate_no_good_cuts_when_fixing_bound(self, no_good_cuts):
+        """Deactivate no-good cuts beyond the incumbent bound checkpoint.
+
+        Parameters
+        ----------
+        no_good_cuts : ConstraintList
+            No-good cut list stored on the master model.
+        """
         try:
             valid_no_good_cuts_num = self.num_no_good_cuts_added[self.primal_bound]
             if self.config.add_no_good_cuts:

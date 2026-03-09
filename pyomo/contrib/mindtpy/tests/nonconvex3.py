@@ -9,6 +9,7 @@
 
 # -*- coding: utf-8 -*-
 """Problem C in paper 'Outer approximation algorithms for separable nonconvex mixed-integer nonlinear programs'.
+
 The problem in the paper has two optimal solution. Variable y4 and y6 are symmetric. Therefore, we remove variable y6 for simplification.
 
 Ref:
@@ -34,8 +35,18 @@ from pyomo.common.collections import ComponentMap
 
 
 class Nonconvex3(ConcreteModel):
+    """Nonconvex MINLP benchmark problem C for MindtPy tests."""
+
     def __init__(self, *args, **kwargs):
-        """Create the problem."""
+        """Create the problem.
+
+        Parameters
+        ----------
+        *args
+            Positional arguments forwarded to ``ConcreteModel``.
+        **kwargs
+            Keyword arguments forwarded to ``ConcreteModel``.
+        """
         kwargs.setdefault('name', 'Nonconvex3')
         super(Nonconvex3, self).__init__(*args, **kwargs)
         m = self
