@@ -971,7 +971,7 @@ class _MindtPyAlgorithm:
 
         Parameters
         ----------
-        add_oa_cuts : Bool
+        add_oa_cuts : bool
             Whether to add OA cuts after solving the relaxed NLP problem.
 
         Raises
