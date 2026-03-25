@@ -63,7 +63,7 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
-        """Add OA cuts for the current feasibility pump iterate.
+        """Add cuts for the current feasibility pump iterate.
 
         Parameters
         ----------

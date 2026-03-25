@@ -699,16 +699,18 @@ class _MindtPyAlgorithm:
             self.update_gap()
 
     def update_suboptimal_dual_bound(self, results):
-        """Update dual bound using relaxed-problem bounds from a suboptimal solve.
+        """Update dual bound from solver-reported bounds after a suboptimal solve.
 
-        If the relaxed problem is not solved to optimality, the dual bound is
-        updated according to the solver-reported bound.
+        This helper is used whenever a subproblem is feasible but not solved to optimality.
+        In these cases, MindtPy updates the global dual bound using the best bound reported
+        by the subsolver.
 
         Parameters
         ----------
         results : SolverResults
-            Results from solving the relaxed problem.
-            The dual bound of the relaxed problem can only be obtained from the result object.
+            Results from solving a subproblem. For minimization, the bound is
+            taken from ``results.problem.lower_bound``; for maximization, it is
+            taken from ``results.problem.upper_bound``.
         """
         if self.objective_sense == minimize:
             bound_value = results.problem.lower_bound
@@ -719,8 +721,8 @@ class _MindtPyAlgorithm:
     def update_primal_bound(self, bound_value):
         """Update the primal bound.
 
-        Call after solve fixed NLP subproblem.
-        Use the optimal primal bound of the relaxed problem to update the dual bound.
+        Call after solving a primal-feasible subproblem.
+        Uses the candidate objective value to update the global primal bound.
 
         Parameters
         ----------
@@ -970,7 +972,7 @@ class _MindtPyAlgorithm:
         Parameters
         ----------
         add_oa_cuts : Bool
-            Whether add OA cuts after solving the relaxed NLP problem.
+            Whether to add OA cuts after solving the relaxed NLP problem.
 
         Raises
         ------
@@ -1760,9 +1762,11 @@ class _MindtPyAlgorithm:
                 self.results.solver.termination_condition = tc.optimal
 
     def set_up_tabulist_callback(self):
-        """Set up the tabu-list callback using ``IncumbentCallback``.
+        """Register the CPLEX incumbent callback used for tabu-list filtering.
 
-        Currently this supports CPLEX persistent interfaces only.
+        The callback inspects each candidate incumbent integer assignment and
+        rejects assignments that are already present in ``self.integer_list``.
+        This behavior is available only through the CPLEX persistent interface.
         """
         tabulist = self.mip_opt._solver_model.register_callback(
             tabu_list.IncumbentCallback_cplex
@@ -1996,17 +2000,18 @@ class _MindtPyAlgorithm:
     def handle_main_optimal(self, main_mip, update_bound=True):
         """Handle an optimal solve of the master MIP.
 
-        This function copies the results from 'solve_main' to the working model and updates
-        the upper/lower bound. This function is called after an optimal solution is found for
-        the main problem.
+        This function validates integer-variable values, copies the main-problem
+        solution to ``fixed_nlp`` for warm starting, and optionally updates the
+        global dual bound using the master-MIP objective value.
 
         Parameters
         ----------
         main_mip : Pyomo model
             The MIP main problem.
         update_bound : bool, optional
-            Whether to update the bound, by default True.
-            Bound will not be updated when handling regularization problem.
+            Whether to update the dual bound, by default True.
+            The dual bound is not updated when handling the regularization
+            problem.
         """
         # proceed. Just need integer values
         MindtPy = main_mip.MindtPy_utils
@@ -2074,14 +2079,16 @@ class _MindtPyAlgorithm:
     def handle_main_max_timelimit(self, main_mip, main_mip_results):
         """Handle a time-limited solve of the master MIP.
 
-        This function handles the result of the latest iteration of solving the MIP problem
-        given that solving the MIP takes too long.
+        This function copies the current master-MIP variable values to
+        ``fixed_nlp`` for warm starting the NLP subproblem, updates the
+        suboptimal dual bound from solver-reported bounds, and logs the
+        time-limit event.
 
         Parameters
         ----------
         main_mip : Pyomo model
             The MIP main problem.
-        main_mip_results : [type]
+        main_mip_results : SolverResults
             Results from solving the MIP main subproblem.
         """
         # If we have found a valid feasible solution, we take that. If not, we can at least use the dual bound.
@@ -2363,7 +2370,7 @@ class _MindtPyAlgorithm:
             )
 
     def update_result(self):
-        """Populate the final solver results object from algorithm state."""
+        """Populate the solver results object from algorithm state."""
         if self.objective_sense == minimize:
             self.results.problem.lower_bound = self.dual_bound
             self.results.problem.upper_bound = self.primal_bound
@@ -2576,8 +2583,12 @@ class _MindtPyAlgorithm:
     def handle_fp_subproblem_optimal(self, fp_nlp):
         """Handle an optimal feasibility-pump NLP subproblem solution.
 
-        Copies the solution to the working model, updates bound, adds OA cuts / no-good cuts /
-        increasing objective cut, calculates the duals and stores incumbent solution if it has been improved.
+        Copies the FP-NLP solution to the working model and adds orthogonality
+        cuts to help prevent cycling. If the FP projection has converged,
+        this function then solves the fixed-NLP subproblem at the current MIP
+        integer point and delegates primal-bound updates / incumbent handling
+        to ``handle_subproblem_optimal``. When the primal bound improves, it
+        tightens the FP improving-objective cut.
 
         Parameters
         ----------
@@ -3332,7 +3343,7 @@ class _MindtPyAlgorithm:
             return False
 
     def reached_time_limit(self):
-        """Check whether the configured wall-clock time limit has been reached."""
+        """Check whether the configured time limit has been reached."""
         if get_main_elapsed_time(self.timing) >= self.config.time_limit:
             self.config.logger.info(
                 'MindtPy unable to converge bounds '

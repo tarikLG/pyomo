@@ -32,7 +32,7 @@ cplex, cplex_available = attempt_import('cplex')
 class LazyOACallback_cplex(
     cplex.callbacks.LazyConstraintCallback if cplex_available else object
 ):
-    """Inherent class in CPLEX to call Lazy callback."""
+    """CPLEX lazy-constraint callback used by MindtPy single-tree OA."""
 
     def copy_lazy_var_list_values(
         self, opt, from_list, to_list, config, skip_stale=False, skip_fixed=True
@@ -381,7 +381,7 @@ class LazyOACallback_cplex(
         opt : SolverFactory
             The cplex_persistent solver.
         feasible : bool, optional
-            Whether the integer combination yields a feasible or infeasible NLP, by default False.
+            Reserved for API compatibility; currently unused.
 
         Raises
         ------
@@ -439,8 +439,8 @@ class LazyOACallback_cplex(
 
         This function is called during the branch and bound of main mip, more
         exactly when a feasible solution is found and LazyCallback is activated.
-        Copy the result to working model and update upper or lower bound.
-        In LP-NLP, upper or lower bound are updated during solving the main problem.
+        Copies the incumbent values to ``fixed_nlp`` for warm-starting and
+        updates the global dual bound from the callback-reported master bound.
 
         Parameters
         ----------
@@ -664,7 +664,7 @@ class LazyOACallback_cplex(
             )
 
     def __call__(self):
-        """This is an inherent function in LazyConstraintCallback in CPLEX.
+        """Entry point for CPLEX LazyConstraintCallback.
 
         This function is called whenever an integer solution is found during the branch and bound process.
         """
@@ -952,8 +952,9 @@ def handle_lazy_main_feasible_solution_gurobi(cb_m, cb_opt, mindtpy_solver, conf
     This function is called during the branch and bound of main MIP problem,
     more exactly when a feasible solution is found and LazyCallback is activated.
 
-    Copy the solution to working model and update upper or lower bound.
-    In LP-NLP, upper or lower bound are updated during solving the main problem.
+    Copies the incumbent values to ``fixed_nlp`` (and ``mip`` for cut
+    generation) and updates the global dual bound from
+    ``GRB.Callback.MIPSOL_OBJBND``.
 
     Parameters
     ----------

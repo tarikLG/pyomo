@@ -68,7 +68,7 @@ def calc_jacobians(constraint_list, differentiate_mode):
 def initialize_feas_subproblem(m, feasibility_norm):
     """Add feasibility slacks and objective for the feasibility subproblem.
 
-    Adds feasibility slack variables according to ``config.feasibility_norm``
+    Adds feasibility slack variables according to ``feasibility_norm``
     for an infeasible NLP and defines the feasibility objective.
 
     Parameters
@@ -146,8 +146,8 @@ def add_var_bound(model, config):
 def generate_norm2sq_objective_function(model, setpoint_model, discrete_only=False):
     r"""Generate an FP-NLP objective for minimum Euclidean distance.
 
-    This function generates objective (FP-NLP subproblem) for minimum
-    euclidean distance to setpoint_model.
+    This function generates an objective for minimum squared L2 distance to
+    ``setpoint_model``.
 
     L2 distance of :math:`(x,y) = \sqrt{\sum_i (x_i - y_i)^2}`.
 
@@ -202,7 +202,7 @@ def generate_norm2sq_objective_function(model, setpoint_model, discrete_only=Fal
 
 
 def generate_norm1_objective_function(model, setpoint_model, discrete_only=False):
-    r"""Generate a PF-OA objective for minimum $L_1$ distance.
+    r"""Generate a PF-OA objective for minimum L1 distance.
 
     This function generates objective (PF-OA main problem) for minimum
     Norm1 distance to setpoint_model.
@@ -586,7 +586,7 @@ def set_solver_constraint_violation_tolerance(
     config : ConfigBlock
         The specific configurations for MindtPy.
     warm_start : bool, optional
-        Whether to emit warm-start options for supported NLP subsolvers.
+        Whether to emit warm-start options for IPOPT when using the GAMS NLP solver interface.
     """
     if solver_name == 'baron':
         opt.options['AbsConFeasTol'] = config.zero_tolerance
@@ -838,7 +838,7 @@ def setup_results_object(results, model, config):
 
 
 def fp_converged(working_model, mip_model, proj_zero_tolerance, discrete_only=True):
-    """Calculates the euclidean norm between the discrete variables in the MIP and NLP models.
+    """Check whether FP projection distance is below the convergence tolerance.
 
     Parameters
     ----------
@@ -853,8 +853,9 @@ def fp_converged(working_model, mip_model, proj_zero_tolerance, discrete_only=Tr
 
     Returns
     -------
-    distance : float
-        The euclidean norm between the discrete variables in the MIP and NLP models.
+    bool
+        ``True`` if the maximum squared variable difference (optionally over
+        discrete variables only) is within ``proj_zero_tolerance``.
     """
     distance = max(
         (nlp_var.value - milp_var.value) ** 2
@@ -910,7 +911,7 @@ def generate_norm_constraint(fp_nlp_model, mip_model, config):
     fp_nlp_model : Pyomo model
         The feasibility pump NLP subproblem.
     mip_model : Pyomo model
-        The mip_model model.
+        The FP main MIP model providing the reference point.
     config : ConfigBlock
         The specific configurations for MindtPy.
     """
