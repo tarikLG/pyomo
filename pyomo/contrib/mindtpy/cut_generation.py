@@ -198,7 +198,7 @@ def add_oa_cuts_for_grey_box(
     objective_sense : int
         Objective sense indicator (``minimize`` or ``maximize``).
     mip_iter : int
-        Master-problem iteration counter.
+        Main-problem iteration counter.
     cb_opt : SolverFactory, optional
         Persistent-solver callback object for lazy-cut injection.
     """
@@ -426,7 +426,7 @@ def add_affine_cuts(target_model, config, timing):
     Parameters
     ----------
     target_model : Pyomo model
-        The relaxed master model receiving affine cuts.
+        The relaxed main model receiving affine cuts.
     config : ConfigBlock
         The specific configurations for MindtPy.
     timing : Timing

@@ -435,12 +435,12 @@ class LazyOACallback_cplex(
             )
 
     def handle_lazy_main_feasible_solution(self, main_mip, mindtpy_solver, config, opt):
-        """Handle a feasible master-MIP solution inside the lazy callback.
+        """Handle a feasible main-MIP solution inside the lazy callback.
 
         This function is called during the branch and bound of main mip, more
         exactly when a feasible solution is found and LazyCallback is activated.
         Copies the incumbent values to ``fixed_nlp`` for warm-starting and
-        updates the global dual bound from the callback-reported master bound.
+        updates the global dual bound from the callback-reported main bound.
 
         Parameters
         ----------

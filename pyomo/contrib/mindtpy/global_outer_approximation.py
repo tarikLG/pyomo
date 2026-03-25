@@ -97,7 +97,7 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
-        """Add GOA affine cuts to the current master problem.
+        """Add GOA affine cuts to the current main problem.
 
         Parameters
         ----------
@@ -120,7 +120,7 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
         Parameters
         ----------
         no_good_cuts : ConstraintList
-            No-good cut list stored on the master model.
+            No-good cut list stored on the main model.
         """
         try:
             valid_no_good_cuts_num = self.num_no_good_cuts_added[self.primal_bound]

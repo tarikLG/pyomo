@@ -95,7 +95,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         _MindtPyAlgorithm.check_config(self)
 
     def initialize_mip_problem(self):
-        """Initialize the OA master MIP and OA cut structures."""
+        """Initialize the OA main MIP and OA cut structures."""
         super().initialize_mip_problem()
         self.jacobians = calc_jacobians(
             self.mip.MindtPy_utils.nonlinear_constraint_list,
@@ -113,7 +113,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
-        """Add OA cuts to the master MIP.
+        """Add OA cuts to the main MIP.
 
         Parameters
         ----------
@@ -152,7 +152,7 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         Parameters
         ----------
         no_good_cuts : ConstraintList
-            No-good cut list stored on the master model.
+            No-good cut list stored on the main model.
         """
         # Only deactivate the last OA cuts may not be correct.
         # Since integer solution may also be cut off by OA cuts due to calculation approximation.

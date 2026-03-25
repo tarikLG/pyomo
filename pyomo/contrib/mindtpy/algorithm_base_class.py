@@ -1998,11 +1998,11 @@ class _MindtPyAlgorithm:
     # The following functions deal with handling the solution we get from the above MIP solver function
 
     def handle_main_optimal(self, main_mip, update_bound=True):
-        """Handle an optimal solve of the master MIP.
+        """Handle an optimal solve of the main MIP.
 
         This function validates integer-variable values, copies the main-problem
         solution to ``fixed_nlp`` for warm starting, and optionally updates the
-        global dual bound using the master-MIP objective value.
+        global dual bound using the main-MIP objective value.
 
         Parameters
         ----------
@@ -2046,10 +2046,10 @@ class _MindtPyAlgorithm:
             )
 
     def handle_main_infeasible(self):
-        """Handle an infeasible solve of the master MIP.
+        """Handle an infeasible solve of the main MIP.
 
         This updates logging and termination-condition state when no feasible
-        master solution is available.
+        main solution is available.
         """
         self.config.logger.info(
             'MIP main problem is infeasible. '
@@ -2077,9 +2077,9 @@ class _MindtPyAlgorithm:
                 self.results.solver.termination_condition = tc.feasible
 
     def handle_main_max_timelimit(self, main_mip, main_mip_results):
-        """Handle a time-limited solve of the master MIP.
+        """Handle a time-limited solve of the main MIP.
 
-        This function copies the current master-MIP variable values to
+        This function copies the current main-MIP variable values to
         ``fixed_nlp`` for warm starting the NLP subproblem, updates the
         suboptimal dual bound from solver-reported bounds, and logs the
         time-limit event.
@@ -2113,7 +2113,7 @@ class _MindtPyAlgorithm:
         )
 
     def handle_main_unbounded(self, main_mip):
-        """Handle an unbounded solve of the master MIP relaxation.
+        """Handle an unbounded solve of the main MIP relaxation.
 
         This function handles the result of the latest iteration of solving the MIP
         problem given an unbounded solution due to the relaxation.
@@ -3046,14 +3046,14 @@ class _MindtPyAlgorithm:
         self.process_objective(update_var_con_list=True)
 
     def handle_main_mip_termination(self, main_mip, main_mip_results):
-        """Dispatch handling for master-MIP termination conditions.
+        """Dispatch handling for main-MIP termination conditions.
 
         Parameters
         ----------
         main_mip : Block
-            Current master MIP model.
+            Current main MIP model.
         main_mip_results : SolverResults or None
-            Solver results returned by the master MIP solve.
+            Solver results returned by the main MIP solve.
 
         Returns
         -------
@@ -3284,7 +3284,7 @@ class _MindtPyAlgorithm:
         return solution_name_obj
 
     def add_regularization(self):
-        """Solve regularization master problems when regularization is active."""
+        """Solve regularization main problems when regularization is active."""
         if self.best_solution_found is not None:
             # The main problem might be unbounded, regularization is activated only when a valid bound is provided.
             if self.dual_bound != self.dual_bound_progress[0]:
