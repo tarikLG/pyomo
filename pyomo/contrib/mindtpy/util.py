@@ -149,7 +149,7 @@ def generate_norm2sq_objective_function(model, setpoint_model, discrete_only=Fal
     This function generates an objective for minimum squared L2 distance to
     ``setpoint_model``.
 
-    L2 distance of :math:`(x,y) = \sqrt{\sum_i (x_i - y_i)^2}`.
+    L2 distance of :math:`(x,y) = \sum_i (x_i - y_i)^2`.
 
     Parameters
     ----------
