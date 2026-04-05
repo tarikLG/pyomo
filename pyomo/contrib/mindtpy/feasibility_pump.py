@@ -9,7 +9,7 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
-"""Feasibility Pump strategy implementation for MindtPy."""
+"""Feasibility Pump initialization strategy implementation for MindtPy."""
 
 import logging
 from pyomo.contrib.mindtpy.config_options import _get_MindtPy_FP_config
