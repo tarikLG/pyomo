@@ -688,7 +688,8 @@ class LazyOACallback_cplex(
         # Lazy constraints separated when processing a MIP start will be discarded after that MIP start has been processed.
         # This means that the callback may have to separate the same constraint again for the next MIP start or for a solution that is found later in the solution process.
         # https://www.ibm.com/docs/en/icos/22.1.1?topic=SSSA5P_22.1.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.LazyConstraintCallback-class.htm
-        # For the minlp3_simple example, all the solutions are obtained from mip_start (solution source). Therefore, it will not go to a branch and bound process.Cause an error output.
+        # In the minlp3_simple example, all solutions come from mip_start as the solution source.
+        # As a result, CPLEX may never enter the branch-and-bound process, which can otherwise lead to this error.
         if (
             self.get_solution_source()
             != cplex.callbacks.SolutionSource.mipstart_solution
