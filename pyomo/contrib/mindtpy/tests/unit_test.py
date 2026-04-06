@@ -12,7 +12,7 @@
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.util import set_var_valid_value
 
-from pyomo.environ import Var, Integers, ConcreteModel, Integers
+from pyomo.environ import Var, Integers, ConcreteModel
 from pyomo.contrib.mindtpy.algorithm_base_class import _MindtPyAlgorithm
 from pyomo.contrib.mindtpy.config_options import _get_MindtPy_OA_config
 from pyomo.contrib.mindtpy.tests.minlp5_simple import Minlp5Simple
