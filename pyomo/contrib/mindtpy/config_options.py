@@ -261,10 +261,11 @@ def _add_ecp_configs(CONFIG):
         ConfigValue(
             default=None,
             domain=PositiveFloat,
-            description='ECP tolerance',
-            doc='Feasibility tolerance used to determine the stopping criterion in'
-            'the ECP method. As long as nonlinear constraint are violated for '
-            'more than this tolerance, the method will keep iterating.',
+            description='ECP tolerance (defaults to absolute bound tolerance)',
+            doc='Feasibility tolerance used to determine the stopping criterion in '
+            'the ECP method. As long as nonlinear constraints are violated by '
+            'more than this tolerance, the method will keep iterating. If not '
+            'specified, this value is normalized to ``absolute_bound_tolerance``.',
         ),
     )
     CONFIG.declare(

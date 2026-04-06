@@ -8,10 +8,11 @@
 # ____________________________________________________________________________________
 
 # -*- coding: utf-8 -*-
-"""
-See David Bernal PhD proposal example.
+"""MINLP test model from Dr. David Bernal's PhD thesis proposal.
 
-Link: https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
+References
+----------
+https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
 """
 
 from pyomo.environ import (
@@ -28,7 +29,7 @@ from pyomo.common.collections import ComponentMap
 
 
 class ProposalModel(ConcreteModel):
-    """MINLP test model from a MindtPy method proposal example."""
+    """MINLP test model from Dr. David Bernal's PhD thesis proposal."""
 
     def __init__(self, *args, **kwargs):
         """Create the problem.

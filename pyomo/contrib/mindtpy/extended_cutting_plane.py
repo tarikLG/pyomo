@@ -71,9 +71,18 @@ class MindtPy_ECP_Solver(_MindtPyAlgorithm):
         )
 
     def check_config(self):
-        """Validate and normalize ECP-specific configuration values."""
+        """Validate and normalize ECP-specific configuration values.
+
+        Normalization behavior:
+        - If ``ecp_tolerance`` is ``None``, set
+          ``ecp_tolerance = absolute_bound_tolerance``.
+        - The resulting ``ecp_tolerance`` is used in ECP nonlinear-constraint
+          satisfaction checks, where the algorithm continues while any slack is
+          less than ``-ecp_tolerance``.
+        """
         config = self.config
-        # if ecp tolerance is not provided use bound tolerance
+        # Normalize ECP feasibility tolerance to the global absolute bound
+        # tolerance when the user does not provide an explicit ECP value.
         if config.ecp_tolerance is None:
             config.ecp_tolerance = config.absolute_bound_tolerance
         super().check_config()

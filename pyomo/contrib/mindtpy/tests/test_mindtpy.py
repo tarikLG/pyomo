@@ -12,11 +12,11 @@
 from pyomo.core.expr.calculus.diff_with_sympy import differentiate_available
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
-from pyomo.contrib.mindtpy.tests.MINLP_simple import SimpleMINLP as SimpleMINLP
-from pyomo.contrib.mindtpy.tests.MINLP2_simple import SimpleMINLP as SimpleMINLP2
-from pyomo.contrib.mindtpy.tests.MINLP3_simple import SimpleMINLP as SimpleMINLP3
-from pyomo.contrib.mindtpy.tests.MINLP4_simple import SimpleMINLP4
-from pyomo.contrib.mindtpy.tests.MINLP5_simple import SimpleMINLP5
+from pyomo.contrib.mindtpy.tests.minlp_simple import MinlpSimple
+from pyomo.contrib.mindtpy.tests.minlp2_simple import Minlp2Simple
+from pyomo.contrib.mindtpy.tests.minlp3_simple import Minlp3Simple
+from pyomo.contrib.mindtpy.tests.minlp4_simple import Minlp4Simple
+from pyomo.contrib.mindtpy.tests.minlp5_simple import Minlp5Simple
 from pyomo.contrib.mindtpy.tests.from_proposal import ProposalModel
 from pyomo.contrib.mindtpy.tests.constraint_qualification_example import (
     ConstraintQualificationExample,
@@ -30,22 +30,22 @@ from pyomo.opt import TerminationCondition
 full_model_list = [
     EightProcessFlowsheet(convex=True),
     ConstraintQualificationExample(),
-    SimpleMINLP(),
-    SimpleMINLP2(),
-    SimpleMINLP3(),
-    SimpleMINLP4(),
-    SimpleMINLP5(),
+    MinlpSimple(),
+    Minlp2Simple(),
+    Minlp3Simple(),
+    Minlp4Simple(),
+    Minlp5Simple(),
     ProposalModel(),
     OnlineDocExample(),
 ]
 model_list = [
     EightProcessFlowsheet(convex=True),
     ConstraintQualificationExample(),
-    SimpleMINLP2(),
+    Minlp2Simple(),
 ]
 nonconvex_model_list = [EightProcessFlowsheet(convex=False)]
 
-obj_nonlinear_sum_model_list = [SimpleMINLP(), SimpleMINLP5()]
+obj_nonlinear_sum_model_list = [MinlpSimple(), Minlp5Simple()]
 
 LP_model = LP_unbounded()
 LP_model._generate_model()
@@ -117,7 +117,7 @@ class TestMindtPy(unittest.TestCase):
         """Test the outer approximation decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
 
-            def callback(model):
+            def force_zero_binary_pattern_callback(model):
                 """Set binaries to a fixed pattern to induce cycling behavior.
 
                 Parameters
@@ -129,7 +129,7 @@ class TestMindtPy(unittest.TestCase):
                 model.Y[2].value = 0
                 model.Y[3].value = 0
 
-            model = SimpleMINLP2()
+            model = Minlp2Simple()
             # The callback function will make the OA method cycling.
             results = opt.solve(
                 model,
@@ -137,7 +137,7 @@ class TestMindtPy(unittest.TestCase):
                 init_strategy='rNLP',
                 mip_solver=required_solvers[1],
                 nlp_solver=required_solvers[0],
-                call_before_subproblem_solve=callback,
+                call_before_subproblem_solve=force_zero_binary_pattern_callback,
             )
             self.assertIs(
                 results.solver.termination_condition, TerminationCondition.feasible
@@ -544,7 +544,7 @@ class TestMindtPy(unittest.TestCase):
     def test_infeasible_model(self):
         """Test the outer approximation decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = SimpleMINLP().clone()
+            model = MinlpSimple().clone()
             model.X[1].fix(0)
             model.Y[1].fix(0)
             results = opt.solve(

@@ -33,7 +33,7 @@ from pyomo.environ import (
 from pyomo.common.collections import ComponentMap
 
 
-class SimpleMINLP5(ConcreteModel):
+class Minlp5Simple(ConcreteModel):
     """Convex MINLP test instance used by regularization and utility tests."""
 
     def __init__(self, *args, **kwargs):
@@ -46,8 +46,8 @@ class SimpleMINLP5(ConcreteModel):
         **kwargs
             Keyword arguments forwarded to ``ConcreteModel``.
         """
-        kwargs.setdefault('name', 'SimpleMINLP5')
-        super(SimpleMINLP5, self).__init__(*args, **kwargs)
+        kwargs.setdefault('name', 'Minlp5Simple')
+        super(Minlp5Simple, self).__init__(*args, **kwargs)
         m = self
 
         m.x = Var(within=Reals, bounds=(1, 20), initialize=5.29)
@@ -67,3 +67,7 @@ class SimpleMINLP5(ConcreteModel):
         m.optimal_solution = ComponentMap()
         m.optimal_solution[m.x] = 4.991797840270567
         m.optimal_solution[m.y] = 7.0
+
+
+# Backward-compatible alias.
+SimpleMINLP5 = Minlp5Simple

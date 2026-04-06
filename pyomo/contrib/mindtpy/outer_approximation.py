@@ -95,7 +95,14 @@ class MindtPy_OA_Solver(_MindtPyAlgorithm):
         _MindtPyAlgorithm.check_config(self)
 
     def initialize_mip_problem(self):
-        """Initialize the OA main MIP and OA cut structures."""
+        """Initialize OA data structures on top of base MIP initialization.
+
+        The base implementation prepares solver subproblems by constructing
+        ``self.mip`` from a clone of the working model and ``self.fixed_nlp``
+        from an integer-fixed clone (plus feasibility-subproblem setup).
+        This OA override then precomputes Jacobians for nonlinear constraints
+        and creates the OA cut container.
+        """
         super().initialize_mip_problem()
         self.jacobians = calc_jacobians(
             self.mip.MindtPy_utils.nonlinear_constraint_list,

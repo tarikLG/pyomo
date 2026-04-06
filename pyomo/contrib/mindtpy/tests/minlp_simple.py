@@ -36,13 +36,13 @@ from pyomo.environ import (
     Block,
 )
 from pyomo.common.collections import ComponentMap
-from pyomo.contrib.mindtpy.tests.MINLP_simple_grey_box import (
+from pyomo.contrib.mindtpy.tests.minlp_simple_grey_box import (
     GreyBoxModel,
     build_model_external,
 )
 
 
-class SimpleMINLP(ConcreteModel):
+class MinlpSimple(ConcreteModel):
     """Convex MINLP problem Assignment 6 APSE."""
 
     def __init__(self, grey_box=False, *args, **kwargs):
@@ -52,17 +52,19 @@ class SimpleMINLP(ConcreteModel):
         ----------
         grey_box : bool, optional
             Whether to formulate the model using an external grey-box block.
+            When ``True``, the model adds linking constraints ``con_X_1``,
+            ``con_X_2``, ``con_Y_1``, ``con_Y_2``, and ``con_Y_3``.
         *args
             Positional arguments forwarded to ``ConcreteModel``.
         **kwargs
             Keyword arguments forwarded to ``ConcreteModel``.
         """
-        kwargs.setdefault('name', 'SimpleMINLP')
+        kwargs.setdefault('name', 'MinlpSimple')
         if grey_box and GreyBoxModel is None:
             m = None
             return
 
-        super(SimpleMINLP, self).__init__(*args, **kwargs)
+        super(MinlpSimple, self).__init__(*args, **kwargs)
         m = self
 
         """Set declarations"""
@@ -166,3 +168,7 @@ class SimpleMINLP(ConcreteModel):
         m.optimal_solution[m.Y[1]] = 0.0
         m.optimal_solution[m.Y[2]] = 1.0
         m.optimal_solution[m.Y[3]] = 0.0
+
+
+# Backward-compatible alias.
+SimpleMINLP = MinlpSimple

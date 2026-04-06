@@ -57,6 +57,7 @@ class EightProcessFlowsheet(ConcreteModel):
         ----------
         convex : bool, optional
             Whether to use the convex variant of the benchmark model.
+            The convex variant replaces the exponential process equalities with <= inequalities.
         *args
             Positional arguments forwarded to ``ConcreteModel``.
         **kwargs

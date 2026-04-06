@@ -74,7 +74,9 @@ class MindtPy_GOA_Solver(_MindtPyAlgorithm):
     def update_primal_bound(self, bound_value):
         """Update the primal bound.
 
-        Call after solving a primal-feasible subproblem (typically fixed NLP).
+        Call after obtaining a primal-feasible objective candidate.
+        This can come from a fixed NLP subproblem or from a feasible single-tree
+        incumbent callback update.
         Uses the candidate objective value to update the global primal bound.
 
         Parameters

@@ -8,15 +8,19 @@
 # ____________________________________________________________________________________
 
 # -*- coding: utf-8 -*-
-"""Problem A in paper 'Outer approximation algorithms for separable nonconvex mixed-integer nonlinear programs'
+"""Nonconvex MINLP test model based on problem A from a benchmark study.
+
+The expected optimal solution value is 7.667.
 
 Ref:
-Kesavan P, Allgor R J, Gatzke E P, et al. Outer approximation algorithms for separable nonconvex mixed-integer nonlinear programs[J]. Mathematical Programming, 2004, 100(3): 517-535.
+    Kesavan P, Allgor R J, Gatzke E P, et al. Outer approximation algorithms
+    for separable nonconvex mixed-integer nonlinear programs[J].
+    Mathematical Programming, 2004, 100(3): 517-535.
 
-Problem type:   nonconvex MINLP
-        size:   3  binary variable
-                2  continuous variables
-                6  constraints
+    Problem type:    nonconvex MINLP
+        size:    3  binary variables
+             2  continuous variables
+             6  constraints
 
 """
 
@@ -33,7 +37,7 @@ from pyomo.common.collections import ComponentMap
 
 
 class Nonconvex1(ConcreteModel):
-    """Nonconvex MINLP benchmark problem A for MindtPy tests."""
+    """Nonconvex MINLP benchmark instance used in MindtPy regression tests."""
 
     def __init__(self, *args, **kwargs):
         """Create the problem.

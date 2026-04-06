@@ -32,7 +32,7 @@ from pyomo.environ import (
 from pyomo.common.collections import ComponentMap
 
 
-class FeasPump1(ConcreteModel):
+class FeasibilityPump1(ConcreteModel):
     """Feasibility Pump example 1"""
 
     def __init__(self, *args, **kwargs):
@@ -46,7 +46,7 @@ class FeasPump1(ConcreteModel):
             Keyword arguments forwarded to ``ConcreteModel``.
         """
         kwargs.setdefault('name', 'Feasibility Pump 1')
-        super(FeasPump1, self).__init__(*args, **kwargs)
+        super(FeasibilityPump1, self).__init__(*args, **kwargs)
         m = self
 
         m.x = Var(within=Binary)
@@ -65,3 +65,7 @@ class FeasPump1(ConcreteModel):
         m.optimal_solution[m.x] = 0.0
         m.optimal_solution[m.y1] = 0.5
         m.optimal_solution[m.y2] = 0.0
+
+
+    # Backward-compatible alias.
+    FeasPump1 = FeasibilityPump1

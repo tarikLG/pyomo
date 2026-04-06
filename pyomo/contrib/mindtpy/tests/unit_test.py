@@ -15,7 +15,7 @@ from pyomo.contrib.mindtpy.util import set_var_valid_value
 from pyomo.environ import Var, Integers, ConcreteModel, Integers
 from pyomo.contrib.mindtpy.algorithm_base_class import _MindtPyAlgorithm
 from pyomo.contrib.mindtpy.config_options import _get_MindtPy_OA_config
-from pyomo.contrib.mindtpy.tests.MINLP5_simple import SimpleMINLP5
+from pyomo.contrib.mindtpy.tests.minlp5_simple import Minlp5Simple
 from pyomo.contrib.mindtpy.util import add_var_bound
 
 
@@ -74,7 +74,7 @@ class UnitTestMindtPy(unittest.TestCase):
 
     def test_add_var_bound(self):
         """Verify default bounds are added when variable bounds are missing."""
-        m = SimpleMINLP5().clone()
+        m = Minlp5Simple().clone()
         m.x.lb = None
         m.x.ub = None
         m.y.lb = None

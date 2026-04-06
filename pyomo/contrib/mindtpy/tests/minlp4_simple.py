@@ -8,7 +8,7 @@
 # ____________________________________________________________________________________
 
 # -*- coding: utf-8 -*-
-"""Example 1 in Paper 'Using regularization and second order information in outer approximation for convex MINLP'
+"""Convex MINLP test model based on Example 1 from a regularization OA study.
 
 The expected optimal solution value is -56.981.
 
@@ -37,8 +37,8 @@ from pyomo.environ import (
 from pyomo.common.collections import ComponentMap
 
 
-class SimpleMINLP4(ConcreteModel):
-    """Regularization-focused convex MINLP test instance."""
+class Minlp4Simple(ConcreteModel):
+    """Convex MINLP benchmark instance used in MindtPy regression tests."""
 
     def __init__(self, *args, **kwargs):
         """Create the problem.
@@ -50,8 +50,8 @@ class SimpleMINLP4(ConcreteModel):
         **kwargs
             Keyword arguments forwarded to ``ConcreteModel``.
         """
-        kwargs.setdefault('name', 'SimpleMINLP4')
-        super(SimpleMINLP4, self).__init__(*args, **kwargs)
+        kwargs.setdefault('name', 'Minlp4Simple')
+        super(Minlp4Simple, self).__init__(*args, **kwargs)
         m = self
 
         m.x = Var(domain=Reals, bounds=(1, 20), initialize=5.29)
@@ -71,3 +71,7 @@ class SimpleMINLP4(ConcreteModel):
         m.optimal_solution = ComponentMap()
         m.optimal_solution[m.x] = 7.663528589138092
         m.optimal_solution[m.y] = 11.0
+
+
+# Backward-compatible alias.
+SimpleMINLP4 = Minlp4Simple

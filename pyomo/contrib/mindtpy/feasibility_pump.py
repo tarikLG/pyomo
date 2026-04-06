@@ -93,5 +93,5 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
         )
 
     def MindtPy_iteration_loop(self):
-        """Run the Feasibility Pump iteration loop."""
-        pass
+        """Run the Feasibility Pump-specific outer iteration loop."""
+        self.fp_loop()
