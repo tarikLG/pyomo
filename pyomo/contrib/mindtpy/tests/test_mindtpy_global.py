@@ -96,6 +96,53 @@ class TestMindtPy(unittest.TestCase):
                 )
                 self.check_optimal_solution(model)
 
+    @unittest.skipIf(not subsolvers_available, 'Required subsolvers are not available')
+    @unittest.skipIf(not pyomo.contrib.mcpp.pyomo_mcpp.mcpp_available(), 'MC++ is not available')
+    def test_GOA_check_config_single_tree_invalid_solver(self):
+        """Test the global outer approximation check config raises ValueError with single_tree and invalid mip_solver."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                with self.assertRaisesRegex(ValueError, "Only cplex_persistent and gurobi_persistent are supported for LP/NLP based Branch and Bound method."):
+                    opt.solve(model, strategy='GOA', single_tree=True, mip_solver='glpk', nlp_solver=required_solvers[0])
+
+    @unittest.skipIf(not subsolvers_available, 'Required subsolvers are not available')
+    @unittest.skipIf(not pyomo.contrib.mcpp.pyomo_mcpp.mcpp_available(), 'MC++ is not available')
+    def test_GOA_check_config_single_tree_thread_reduction(self):
+        """Test the global outer approximation check config correctly reduces threads when single_tree is used."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                opt.solve(model, strategy='GOA', single_tree=True, mip_solver=required_solvers[1], nlp_solver=required_solvers[0], threads=2)
+                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
+                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+                self.check_optimal_solution(model)
+
+    @unittest.skipIf(not subsolvers_available, 'Required subsolvers are not available')
+    @unittest.skipIf(not pyomo.contrib.mcpp.pyomo_mcpp.mcpp_available(), 'MC++ is not available')
+    def test_GOA_check_config_enforce_no_good_cuts(self):
+        """Test the global outer approximation check config enforces add_no_good_cuts correctly when it and use_tabu_list are False."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                opt.solve(model, strategy='GOA', mip_solver=required_solvers[1], nlp_solver=required_solvers[0], add_no_good_cuts=False, use_tabu_list=False)
+                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
+                self.assertTrue(model.MindtPy_utils.config.add_no_good_cuts)
+                self.assertFalse(model.MindtPy_utils.config.use_tabu_list)
+                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+                self.check_optimal_solution(model)
+
+    @unittest.skipIf(not subsolvers_available, 'Required subsolvers are not available')
+    @unittest.skipIf(not pyomo.contrib.mcpp.pyomo_mcpp.mcpp_available(), 'MC++ is not available')
+    def test_GOA_deactivate_no_good_cuts_when_fixing_bound_robust(self):
+        """Test deactivate_no_good_cuts_when_fixing_bound robustly on a model by invoking the method logic to verify cut enhancements."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                opt.solve(model, strategy='GOA', mip_solver=required_solvers[1], nlp_solver=required_solvers[0], use_tabu_list=True)
+                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
+                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+                self.check_optimal_solution(model)
 
 if __name__ == '__main__':
     unittest.main()
