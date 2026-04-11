@@ -11,7 +11,7 @@
 """Tests for the MindtPy solver."""
 
 import pyomo.common.unittest as unittest
-from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
+from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessProblem
 from pyomo.contrib.mindtpy.tests.nonconvex1 import Nonconvex1
 from pyomo.contrib.mindtpy.tests.nonconvex2 import Nonconvex2
 from pyomo.contrib.mindtpy.tests.nonconvex3 import Nonconvex3
@@ -29,7 +29,7 @@ else:
     subsolvers_available = True
 
 model_list = [
-    EightProcessFlowsheet(convex=False),
+    EightProcessProblem(convex=False),
     Nonconvex1(),
     Nonconvex2(),
     Nonconvex3(),
