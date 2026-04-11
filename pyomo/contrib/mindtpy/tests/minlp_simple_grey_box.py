@@ -173,18 +173,18 @@ if egb_available:
                 # sparse matrix
                 return scipy_sparse.coo_matrix((data, (row, col)), shape=(1, 5))
 
-    def build_model_external(block):
+    def build_model_external(model_block):
         """Create and attach the external grey-box block on the given block.
 
         Parameters
         ----------
-        block : Block
+        model_block : Block
             Block that receives the ``egb`` component used by
             ``minlp_simple.MinlpSimple``.
         """
         ex_model = GreyBoxModel(initial={"X1": 0, "X2": 0, "Y1": 0, "Y2": 1, "Y3": 1})
-        block.egb = egb.ExternalGreyBoxBlock()
-        block.egb.set_external_model(ex_model)
+        model_block.egb = egb.ExternalGreyBoxBlock()
+        model_block.egb.set_external_model(ex_model)
 
 else:
     GreyBoxModel = None
