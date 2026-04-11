@@ -12,8 +12,11 @@
 
 The expected optimal solution value is -56.981.
 
-Ref:
-    Kronqvist J, Bernal D E, Grossmann I E. Using regularization and second order information in outer approximation for convex MINLP[J]. Mathematical Programming, 2020, 180(1): 285-310.
+References
+----------
+Kronqvist, J., Bernal, D. E., and Grossmann, I. E. (2020). Using
+regularization and second order information in outer approximation for convex
+MINLP. Mathematical Programming, 180(1), 285-310.
 
     Problem type:    convex MINLP
             size:    1  binary variable

@@ -12,7 +12,8 @@
 
 References
 ----------
-https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
+Bernal, D. E. (PhD thesis proposal). Convex MINLP project update.
+ResearchGate project page: https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
 """
 
 from pyomo.environ import (

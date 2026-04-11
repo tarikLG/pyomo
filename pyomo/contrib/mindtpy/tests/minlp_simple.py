@@ -13,9 +13,10 @@ Author: David Bernal <https://github.com/bernalde>
 
 The expected optimal solution is 3.5.
 
-Ref:
-    IGNACIO GROSSMANN.
-    CARNEGIE-MELLON UNIVERSITY , PITTSBURGH , PA.
+References
+----------
+Grossmann, I. E. (Advanced PSE lecture, Assignment 6). Carnegie-Mellon
+University, Pittsburgh, PA.
 
     Problem type:    convex MINLP
             size:    3  binary variables

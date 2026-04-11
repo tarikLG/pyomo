@@ -675,8 +675,9 @@ class LazyOACallback_cplex(
         main_mip = self.main_mip
         mindtpy_solver = self.mindtpy_solver
 
-        # The lazy constraint callback may be invoked during MIP start processing. In that case get_solution_source returns mip_start_solution.
-        # Reference: https://www.ibm.com/docs/en/icos/22.1.1?topic=SSSA5P_22.1.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.SolutionSource-class.htm
+        # The lazy constraint callback may be invoked during MIP start processing.
+        # IBM CPLEX SolutionSource documentation:
+        # https://www.ibm.com/docs/en/icos/22.1.1?topic=SSSA5P_22.1.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.SolutionSource-class.htm
         # Another solution source is user_solution = 118, but it will not be encountered in LazyConstraintCallback.
         config.logger.info(
             "Solution source: {} (111 node_solution, 117 heuristic_solution, 119 mipstart_solution)".format(
@@ -687,6 +688,7 @@ class LazyOACallback_cplex(
         # The solution found in MIP start process might be revisited in branch and bound.
         # Lazy constraints separated when processing a MIP start will be discarded after that MIP start has been processed.
         # This means that the callback may have to separate the same constraint again for the next MIP start or for a solution that is found later in the solution process.
+        # IBM CPLEX LazyConstraintCallback documentation:
         # https://www.ibm.com/docs/en/icos/22.1.1?topic=SSSA5P_22.1.1/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.LazyConstraintCallback-class.htm
         # In the minlp3_simple example, all solutions come from mip_start as the solution source.
         # As a result, CPLEX may never enter the branch-and-bound process, which can otherwise lead to this error.

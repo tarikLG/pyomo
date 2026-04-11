@@ -92,6 +92,6 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
             linearize_violated,
         )
 
-    def MindtPy_iteration_loop(self):
+    def feasibility_pump_iteration_loop(self):
         """Run the Feasibility Pump-specific outer iteration loop."""
         self.fp_loop()

@@ -241,7 +241,6 @@ class _MindtPyAlgorithm:
         logger : logging.Logger
             Logger used to emit iteration table headers.
         """
-        # TODO: rewrite
         logger.info(
             '================================================================='
             '============================'
@@ -288,7 +287,7 @@ class _MindtPyAlgorithm:
             # Save ordered lists of main modeling components, so that data can
             # be easily transferred between future model clones.
             self.build_ordered_component_lists(model)
-            self.add_cuts_components(model)
+            self.add_cut_and_feas_components(model)
 
     def model_is_valid(self):
         """
@@ -529,7 +528,7 @@ class _MindtPyAlgorithm:
             v for v in util_block.variable_list if v in var_set and v.is_continuous()
         )
 
-    def add_cuts_components(self, model):
+    def add_cut_and_feas_components(self, model):
         """Create cut and feasibility components used during decomposition.
 
         Parameters
@@ -580,7 +579,10 @@ class _MindtPyAlgorithm:
     def get_dual_integral(self):
         """Calculate the dual integral.
 
-        Ref: The confined primal integral. [http://www.optimization-online.org/DB_FILE/2020/07/7910.pdf]
+        References
+        ----------
+        The confined primal integral. Optimization Online technical report:
+        http://www.optimization-online.org/DB_FILE/2020/07/7910.pdf
 
         Returns
         -------
@@ -623,7 +625,10 @@ class _MindtPyAlgorithm:
     def get_primal_integral(self):
         """Calculate the primal integral.
 
-        Ref: The confined primal integral. [http://www.optimization-online.org/DB_FILE/2020/07/7910.pdf]
+        References
+        ----------
+        The confined primal integral. Optimization Online technical report:
+        http://www.optimization-online.org/DB_FILE/2020/07/7910.pdf
 
         Returns
         -------
@@ -727,7 +732,7 @@ class _MindtPyAlgorithm:
     def update_primal_bound(self, bound_value):
         """Update the primal bound.
 
-        Call after solving a primal-feasible subproblem.
+        Call after solving a primal-feasible NLP subproblem.
         Uses the candidate objective value to update the global primal bound.
 
         Parameters
@@ -1484,7 +1489,8 @@ class _MindtPyAlgorithm:
         termination_condition : Pyomo TerminationCondition
             The termination condition of the fixed NLP subproblem.
         cb_opt : SolverFactory, optional
-            The gurobi_persistent solver, by default None.
+            Callback-capable persistent MIP optimizer used when adding
+            no-good cuts in callback contexts, by default None.
 
         Raises
         ------
@@ -1492,7 +1498,9 @@ class _MindtPyAlgorithm:
             MindtPy unable to handle the NLP subproblem termination condition.
         """
         if termination_condition is tc.maxIterations:
-            # TODO try something else? Reinitialize with different initial value?
+            # Fallback behavior: treat this iterate as unusable and, when
+            # enabled, add a no-good cut to avoid revisiting the same
+            # discrete assignment.
             self.config.logger.info(
                 'NLP subproblem failed to converge within iteration limit.'
             )
@@ -1767,13 +1775,22 @@ class _MindtPyAlgorithm:
             ):
                 self.results.solver.termination_condition = tc.optimal
 
-    def set_up_tabulist_callback(self):
+    def set_up_tabulist_callback_cplex(self):
         """Register the CPLEX incumbent callback used for tabu-list filtering.
 
         The callback inspects each candidate incumbent integer assignment and
         rejects assignments that are already present in ``self.integer_list``.
         This behavior is available only through the CPLEX persistent interface.
+        Gurobi support is not provided here because this implementation depends
+        on CPLEX's incumbent-callback reject mechanism.
         """
+        if self.config.mip_solver != 'cplex_persistent':
+            raise ValueError(
+                'Tabu-list incumbent rejection requires cplex_persistent. '
+                'The current implementation relies on the CPLEX incumbent '
+                'callback reject() mechanism and does not provide an '
+                'equivalent path for {}.'.format(self.config.mip_solver)
+            )
         tabulist = self.mip_opt._solver_model.register_callback(
             tabu_list.IncumbentCallback_cplex
         )
@@ -1805,10 +1822,17 @@ class _MindtPyAlgorithm:
             self.mip_opt._solver_model.set_warning_stream(None)
             self.mip_opt._solver_model.set_log_stream(None)
             self.mip_opt._solver_model.set_error_stream(None)
-        if self.config.mip_solver == 'gurobi_persistent':
+        elif self.config.mip_solver == 'gurobi_persistent':
             self.mip_opt.set_callback(single_tree.LazyOACallback_gurobi)
             self.mip_opt.mindtpy_solver = self
             self.mip_opt.config = self.config
+        else:
+            raise ValueError(
+                'single_tree lazy OA callbacks are supported only for '
+                'cplex_persistent and gurobi_persistent; got {}.'.format(
+                    self.config.mip_solver
+                )
+            )
 
     ##########################################################################################################################################
     # mip_solve.py
@@ -1990,7 +2014,7 @@ class _MindtPyAlgorithm:
         if config.single_tree:
             self.set_up_lazy_OA_callback()
         if config.use_tabu_list:
-            self.set_up_tabulist_callback()
+            self.set_up_tabulist_callback_cplex()
         mip_args = dict(config.mip_solver_args)
         if config.mip_solver in {
             'cplex',
@@ -2006,9 +2030,9 @@ class _MindtPyAlgorithm:
     def handle_main_optimal(self, main_mip, update_bound=True):
         """Handle an optimal solve of the main MIP.
 
-        This function validates integer-variable values, copies the main-problem
-        solution to ``fixed_nlp`` for warm starting, and optionally updates the
-        global dual bound using the main-MIP objective value.
+        This function validates integer-variable values on ``main_mip`` and
+        optionally updates the global dual bound using the main-MIP objective
+        value.
 
         Parameters
         ----------
@@ -2085,7 +2109,7 @@ class _MindtPyAlgorithm:
     def handle_main_max_timelimit(self, main_mip, main_mip_results):
         """Handle a time-limited solve of the main MIP.
 
-        This function copies the current main-MIP variable values to
+        This function copies the current main_MIP model values to
         ``fixed_nlp`` for warm starting the NLP subproblem, updates the
         suboptimal dual bound from solver-reported bounds, and logs the
         time-limit event.
@@ -2490,6 +2514,12 @@ class _MindtPyAlgorithm:
         if config.add_no_good_cuts:
             config.integer_to_binary = True
         if config.use_tabu_list:
+            if config.mip_solver != 'cplex_persistent':
+                config.logger.info(
+                    'Tabu-list incumbent rejection is implemented only for '
+                    'cplex_persistent because it relies on CPLEX incumbent '
+                    'callback reject() behavior.'
+                )
             config.mip_solver = 'cplex_persistent'
             if config.threads > 1:
                 config.threads = 1
@@ -2544,8 +2574,9 @@ class _MindtPyAlgorithm:
                 expr=sum(fp_nlp.MindtPy_utils.objective_value[:]) >= self.primal_bound
             )
 
-        # Add norm_constraint, which guarantees the monotonicity of the norm objective value sequence of all iterations
-        # Ref: Paper 'A storm of feasibility pumps for nonconvex MINLP'   https://doi.org/10.1007/s10107-012-0608-x
+        # Add norm_constraint, which guarantees the monotonicity of the norm objective value sequence of all iterations.
+        # A storm of feasibility pumps for nonconvex MINLP.
+        # DOI: https://doi.org/10.1007/s10107-012-0608-x
         # the norm type is consistent with the norm obj of the FP-main problem.
         if config.fp_norm_constraint:
             generate_norm_constraint(fp_nlp, self.mip, config)
@@ -2589,9 +2620,9 @@ class _MindtPyAlgorithm:
     def handle_fp_subproblem_optimal(self, fp_nlp):
         """Handle an optimal feasibility-pump NLP subproblem solution.
 
-        Copies the FP-NLP solution to the working model and adds orthogonality
+        Copies the fp_nlp solution to the working model and adds orthogonality
         cuts to help prevent cycling. If the FP projection has converged,
-        this function then solves the fixed-NLP subproblem at the current MIP
+        this function then solves the fixed_NLP subproblem at the current MIP
         integer point and delegates primal-bound updates / incumbent handling
         to ``handle_subproblem_optimal``. When the primal bound improves, it
         tightens the FP improving-objective cut.
@@ -3015,7 +3046,7 @@ class _MindtPyAlgorithm:
 
             # Algorithm main loop
             with time_code(self.timing, 'main loop'):
-                self.MindtPy_iteration_loop()
+                self.run_iteration_loop()
 
             # Load solution
             if self.best_solution_found is not None:
@@ -3038,6 +3069,13 @@ class _MindtPyAlgorithm:
             )
 
         return self.results
+
+    def run_iteration_loop(self):
+        """Dispatch to a strategy-specific outer iteration loop implementation."""
+        if hasattr(self, 'feasibility_pump_iteration_loop'):
+            self.feasibility_pump_iteration_loop()
+        else:
+            self.MindtPy_iteration_loop()
 
     def objective_reformulation(self):
         """Apply default objective reformulation behavior for base methods."""
