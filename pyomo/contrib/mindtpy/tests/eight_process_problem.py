@@ -50,7 +50,7 @@ from pyomo.environ import (
 from pyomo.common.collections import ComponentMap
 
 
-class EightProcessFlowsheet(ConcreteModel):
+class EightProcessProblem(ConcreteModel):
     """Flowsheet for the 8 process problem."""
 
     def __init__(self, convex=True, *args, **kwargs):
@@ -67,7 +67,7 @@ class EightProcessFlowsheet(ConcreteModel):
             Keyword arguments forwarded to ``ConcreteModel``.
         """
         kwargs.setdefault('name', 'DuranEx3')
-        super(EightProcessFlowsheet, self).__init__(*args, **kwargs)
+        super(EightProcessProblem, self).__init__(*args, **kwargs)
         m = self
 
         """Set declarations"""

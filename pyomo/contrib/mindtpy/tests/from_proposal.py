@@ -29,7 +29,7 @@ from pyomo.environ import (
 from pyomo.common.collections import ComponentMap
 
 
-class ProposalModel(ConcreteModel):
+class FromProposalModel(ConcreteModel):
     """MINLP test model from Dr. David Bernal's PhD thesis proposal."""
 
     def __init__(self, *args, **kwargs):
@@ -43,7 +43,7 @@ class ProposalModel(ConcreteModel):
             Keyword arguments forwarded to ``ConcreteModel``.
         """
         kwargs.setdefault('name', 'DavidProposalExample')
-        super(ProposalModel, self).__init__(*args, **kwargs)
+        super(FromProposalModel, self).__init__(*args, **kwargs)
         m = self
 
         m.x = Var(domain=Reals, bounds=(0, 20), initialize=1)

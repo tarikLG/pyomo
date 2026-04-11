@@ -11,13 +11,13 @@
 
 from pyomo.core.expr.calculus.diff_with_sympy import differentiate_available
 import pyomo.common.unittest as unittest
-from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
+from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessProblem
 from pyomo.contrib.mindtpy.tests.minlp_simple import MinlpSimple
 from pyomo.contrib.mindtpy.tests.minlp2_simple import Minlp2Simple
 from pyomo.contrib.mindtpy.tests.minlp3_simple import Minlp3Simple
 from pyomo.contrib.mindtpy.tests.minlp4_simple import Minlp4Simple
 from pyomo.contrib.mindtpy.tests.minlp5_simple import Minlp5Simple
-from pyomo.contrib.mindtpy.tests.from_proposal import ProposalModel
+from pyomo.contrib.mindtpy.tests.from_proposal import FromProposalModel
 from pyomo.contrib.mindtpy.tests.constraint_qualification_example import (
     ConstraintQualificationExample,
 )
@@ -28,22 +28,22 @@ from pyomo.solvers.tests.models.QCP_simple import QCP_simple
 from pyomo.opt import TerminationCondition
 
 full_model_list = [
-    EightProcessFlowsheet(convex=True),
+    EightProcessProblem(convex=True),
     ConstraintQualificationExample(),
     MinlpSimple(),
     Minlp2Simple(),
     Minlp3Simple(),
     Minlp4Simple(),
     Minlp5Simple(),
-    ProposalModel(),
+    FromProposalModel(),
     OnlineDocExample(),
 ]
 model_list = [
-    EightProcessFlowsheet(convex=True),
+    EightProcessProblem(convex=True),
     ConstraintQualificationExample(),
     Minlp2Simple(),
 ]
-nonconvex_model_list = [EightProcessFlowsheet(convex=False)]
+nonconvex_model_list = [EightProcessProblem(convex=False)]
 
 obj_nonlinear_sum_model_list = [MinlpSimple(), Minlp5Simple()]
 
@@ -299,7 +299,7 @@ class TestMindtPy(unittest.TestCase):
     def test_OA_quadratic_strategy(self):
         """Test the outer approximation decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = ProposalModel().clone()
+            model = FromProposalModel().clone()
             if SolverFactory('cplex').available():
                 mip_solver = 'cplex'
             elif SolverFactory('gurobi').available():
@@ -531,7 +531,7 @@ class TestMindtPy(unittest.TestCase):
     def test_maximize_obj(self):
         """Test the outer approximation decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            model = ProposalModel().clone()
+            model = FromProposalModel().clone()
             model.objective.sense = maximize
             opt.solve(
                 model,
