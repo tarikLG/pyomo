@@ -871,7 +871,9 @@ def fp_converged(working_model, mip_model, proj_zero_tolerance, discrete_only=Tr
 def add_orthogonality_cuts(working_model, mip_model, config):
     """Add orthogonality cuts.
 
-    This function adds orthogonality cuts to avoid cycling when the independence constraint qualification is not satisfied.
+    This helper lazily creates the FP orthogonality cut container on the
+    working model and MIP model, then adds cuts to avoid cycling when the
+    independence constraint qualification is not satisfied.
 
     Parameters
     ----------
@@ -882,6 +884,14 @@ def add_orthogonality_cuts(working_model, mip_model, config):
     config : ConfigBlock
         The specific configurations for MindtPy.
     """
+    if not hasattr(mip_model.MindtPy_utils.cuts, 'fp_orthogonality_cuts'):
+        mip_model.MindtPy_utils.cuts.fp_orthogonality_cuts = ConstraintList(
+            doc='FP orthogonality cuts'
+        )
+    if not hasattr(working_model.MindtPy_utils.cuts, 'fp_orthogonality_cuts'):
+        working_model.MindtPy_utils.cuts.fp_orthogonality_cuts = ConstraintList(
+            doc='FP orthogonality cuts'
+        )
     mip_integer_vars = mip_model.MindtPy_utils.discrete_variable_list
     nlp_integer_vars = working_model.MindtPy_utils.discrete_variable_list
     orthogonality_cut = (
