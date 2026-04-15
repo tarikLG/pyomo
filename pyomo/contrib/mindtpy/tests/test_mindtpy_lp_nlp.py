@@ -11,7 +11,7 @@
 
 import sys
 import pyomo.common.unittest as unittest
-from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessProblem
+from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.minlp_simple import MinlpSimple
 from pyomo.contrib.mindtpy.tests.minlp3_simple import Minlp3Simple
 from pyomo.contrib.mindtpy.tests.constraint_qualification_example import (
@@ -36,7 +36,7 @@ else:
 
 
 model_list = [
-    EightProcessProblem(convex=True),
+    EightProcessFlowsheet(convex=True),
     ConstraintQualificationExample(),
     MinlpSimple(),
     Minlp3Simple(),

@@ -11,7 +11,7 @@
 """Tests for the MindtPy solver."""
 
 import pyomo.common.unittest as unittest
-from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessProblem
+from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.minlp_simple import MinlpSimple
 from pyomo.contrib.mindtpy.tests.minlp2_simple import Minlp2Simple
 from pyomo.contrib.mindtpy.tests.minlp3_simple import Minlp3Simple
@@ -35,7 +35,7 @@ else:
     subsolvers_available = False
 
 model_list = [
-    EightProcessProblem(convex=True),
+    EightProcessFlowsheet(convex=True),
     ConstraintQualificationExample(),
     MinlpSimple(),
     Minlp2Simple(),
