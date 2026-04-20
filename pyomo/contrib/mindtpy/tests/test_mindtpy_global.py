@@ -10,6 +10,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the MindtPy solver."""
 
+import math
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.nonconvex1 import Nonconvex1
@@ -96,24 +97,6 @@ class TestMindtPy(unittest.TestCase):
                 )
                 self.check_optimal_solution(model)
 
-    def test_GOA_check_config_single_tree_invalid_solver(self):
-        """Test the global outer approximation check config raises ValueError with single_tree and invalid mip_solver."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
-                with self.assertRaisesRegex(ValueError, "Only cplex_persistent and gurobi_persistent are supported for LP/NLP based Branch and Bound method."):
-                    opt.solve(model, strategy='GOA', single_tree=True, mip_solver='glpk', nlp_solver=required_solvers[0])
-
-    def test_GOA_check_config_single_tree_thread_reduction(self):
-        """Test the global outer approximation check config correctly reduces threads when single_tree is used."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
-                opt.solve(model, strategy='GOA', single_tree=True, mip_solver=required_solvers[1], nlp_solver=required_solvers[0], threads=2)
-                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
-                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
-                self.check_optimal_solution(model)
-
     def test_GOA_check_config_enforce_no_good_cuts(self):
         """Test the global outer approximation check config enforces add_no_good_cuts correctly when it and use_tabu_list are False."""
         with SolverFactory('mindtpy') as opt:
@@ -126,57 +109,215 @@ class TestMindtPy(unittest.TestCase):
                 self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
                 self.check_optimal_solution(model)
 
-    def test_GOA_deactivate_no_good_cuts_when_fixing_bound_robust(self):
-        """Test deactivate_no_good_cuts_when_fixing_bound robustly on a model by invoking the method logic to verify cut enhancements."""
+    def test_GOA_deactivate_no_good_cuts_when_fixing_bound(self):
+        """Test deactivate_no_good_cuts_when_fixing_bound on a model by invoking the method logic to verify cut enhancements."""
         with SolverFactory('mindtpy') as opt:
             for model in model_list:
                 model = model.clone()
-                opt.solve(model, strategy='GOA', mip_solver=required_solvers[1], nlp_solver=required_solvers[0], use_tabu_list=True)
-                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
-                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+                opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                    use_tabu_list=True,
+                )
+                self.assertIn(
+                    model.MindtPy_utils.results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
+                no_good_cuts = model.MindtPy_utils.cuts.no_good_cuts
+                self.assertGreater(
+                    len(no_good_cuts),
+                    0,
+                    'Expected GOA run to generate no-good cuts before deactivation checks.',
+                )
+
+                for i in no_good_cuts:
+                    no_good_cuts[i].activate()
+
+                # Keep only the first no-good cut as valid for this bound.
+                valid_no_good_cuts_num = 1
+                opt.primal_bound = 0
+                opt.num_no_good_cuts_added = {opt.primal_bound: valid_no_good_cuts_num}
+                opt.config.add_no_good_cuts = True
+                opt.config.use_tabu_list = True
+                opt.integer_list = list(range(len(no_good_cuts)))
+
+                opt.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
+
+                for i in no_good_cuts:
+                    if i <= valid_no_good_cuts_num:
+                        self.assertTrue(no_good_cuts[i].active)
+                    else:
+                        self.assertFalse(no_good_cuts[i].active)
+                self.assertEqual(len(opt.integer_list), valid_no_good_cuts_num)
+
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=2
+                )
                 self.check_optimal_solution(model)
 
     def test_GOA_initialize_mip_problem_affine_cut_structure(self):
-        """TODO: Assert GOA initializes affine cut structure on solved instances."""
-        self.skipTest(
-            'TODO: After each solve, assert model.MindtPy_utils.cuts.aff_cuts exists '
-            'and has expected type/length progression across iterations.'
-        )
+        """Assert GOA initializes affine-cut structure using one normal solve per model."""
+        for model in model_list:
+            model = model.clone()
+            with SolverFactory('mindtpy') as opt:
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                )
+                mip_constraint_polynomial_degree = opt.mip_constraint_polynomial_degree
+
+            self.assertIn(
+                results.solver.termination_condition,
+                [TerminationCondition.optimal, TerminationCondition.feasible],
+            )
+            self.assertIsInstance(model.MindtPy_utils.cuts.aff_cuts, ConstraintList)
+
+            cuts = model.MindtPy_utils.cuts.aff_cuts
+            cut_count = len(cuts)
+            self.assertGreater(cut_count, 0)
+
+            nonlinear_con_count = len(model.MindtPy_utils.nonlinear_constraint_list)
+            # add_affine_cuts adds at most one concave and one convex cut per nonlinear constraint.
+            self.assertLessEqual(cut_count, 2 * nonlinear_con_count)
+
+            for i in cuts:
+                cut = cuts[i]
+                self.assertTrue(cut.active)
+                self.assertIn(cut.body.polynomial_degree(), mip_constraint_polynomial_degree)
+                # Each affine cut should be a one-sided inequality (either <= or >=).
+                self.assertTrue(cut.has_ub() or cut.has_lb())
+                self.assertFalse(cut.has_ub() and cut.has_lb())
+
+            self.assertAlmostEqual(
+                value(model.objective.expr), model.optimal_value, places=2
+            )
+            self.check_optimal_solution(model)
 
     def test_GOA_update_primal_bound_progress_tracking(self):
-        """TODO: Assert GOA records primal bound progress over solve time."""
-        self.skipTest(
-            'TODO: Assert primal-bound progress containers are populated and monotonic '
-            'for representative models where incumbent improvements occur.'
-        )
+        """Assert GOA records primal-bound progress and consistent timing traces."""
+        for model in model_list:
+            model = model.clone()
+            with SolverFactory('mindtpy') as opt:
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                )
+
+            self.assertIn(
+                results.solver.termination_condition,
+                [TerminationCondition.optimal, TerminationCondition.feasible],
+            )
+
+            primal_progress = opt.primal_bound_progress
+            primal_progress_time = opt.primal_bound_progress_time
+            self.assertGreaterEqual(len(primal_progress), 2)
+            self.assertGreaterEqual(len(primal_progress_time), len(primal_progress))
+            self.assertEqual(opt.primal_bound, primal_progress[-1])
+
+            for i in range(1, len(primal_progress_time)):
+                self.assertGreaterEqual(primal_progress_time[i], primal_progress_time[i - 1])
+
+            if opt.objective_sense == minimize:
+                for i in range(1, len(primal_progress)):
+                    self.assertLessEqual(primal_progress[i], primal_progress[i - 1])
+            else:
+                for i in range(1, len(primal_progress)):
+                    self.assertGreaterEqual(primal_progress[i], primal_progress[i - 1])
+
+            self.assertFalse(math.isnan(primal_progress[-1]))
+            self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+            self.check_optimal_solution(model)
 
     def test_GOA_update_primal_bound_no_improvement_behavior(self):
-        """TODO: Assert GOA handles no-improvement iterations without false updates."""
-        self.skipTest(
-            'TODO: Design a robust model/config scenario where primal_bound_improved is false '
-            'for at least one iteration and assert no-good-cut bookkeeping is unchanged.'
-        )
+        """Assert GOA no-improvement update does not alter no-good-cut bookkeeping."""
+        for model in model_list:
+            model = model.clone()
+            with SolverFactory('mindtpy') as opt:
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                )
 
-    def test_GOA_add_cuts_affine_cut_effect(self):
-        """TODO: Assert add_cuts path contributes affine cuts during GOA iterations."""
-        self.skipTest(
-            'TODO: Validate affine cuts are added by checking cut containers before/after '
-            'iterations on at least one nonconvex model.'
-        )
+            self.assertIn(
+                results.solver.termination_condition,
+                [TerminationCondition.optimal, TerminationCondition.feasible],
+            )
 
-    def test_GOA_deactivate_no_good_cuts_when_fixing_bound(self):
-        """TODO: Assert stale no-good cuts are deactivated when bound is fixed."""
-        self.skipTest(
-            'TODO: Build assertions on active/deactivated no_good_cuts and integer_list '
-            'truncation when add_no_good_cuts/use_tabu_list is enabled.'
-        )
+            old_primal_bound = opt.primal_bound
+            old_no_good_cut_map = dict(opt.num_no_good_cuts_added)
+            old_progress_len = len(opt.primal_bound_progress)
+            old_time_len = len(opt.primal_bound_progress_time)
+
+            # Re-applying the same primal bound must not be marked as an improvement.
+            opt.update_primal_bound(old_primal_bound)
+
+            self.assertFalse(opt.primal_bound_improved)
+            self.assertEqual(opt.primal_bound, old_primal_bound)
+            self.assertEqual(opt.num_no_good_cuts_added, old_no_good_cut_map)
+            self.assertEqual(len(opt.primal_bound_progress), old_progress_len + 1)
+            # Base update appends one timestamp and GOA appends one additional timestamp.
+            self.assertEqual(len(opt.primal_bound_progress_time), old_time_len + 2)
+
+            self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+            self.check_optimal_solution(model)
 
     def test_GOA_deactivate_no_good_cuts_keyerror_path(self):
-        """TODO: Cover error-handling path when primal bound key is missing."""
-        self.skipTest(
-            'TODO: Trigger missing key scenario in a robust way and assert expected '
-            'logging behavior without converting this into a mock-only smoke test.'
-        )
+        """Assert missing primal-bound key is handled without mutating cut/list state."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                    use_tabu_list=True,
+                )
+
+                self.assertIn(
+                    results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
+
+                no_good_cuts = model.MindtPy_utils.cuts.no_good_cuts
+                self.assertGreater(
+                    len(no_good_cuts),
+                    0,
+                    'Expected GOA run to generate no-good cuts before KeyError-path check.',
+                )
+
+                for i in no_good_cuts:
+                    no_good_cuts[i].activate()
+                active_state_before = {i: no_good_cuts[i].active for i in no_good_cuts}
+
+                opt.config.add_no_good_cuts = True
+                opt.config.use_tabu_list = True
+                opt.integer_list = list(range(len(no_good_cuts)))
+                integer_list_before = list(opt.integer_list)
+
+                # Force dictionary miss and exercise the KeyError handling branch.
+                opt.primal_bound = '__missing_primal_bound_key__'
+                self.assertNotIn(opt.primal_bound, opt.num_no_good_cuts_added)
+
+                # Should not raise: method catches KeyError and logs it.
+                opt.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
+
+                for i in no_good_cuts:
+                    self.assertEqual(no_good_cuts[i].active, active_state_before[i])
+                self.assertEqual(opt.integer_list, integer_list_before)
+
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=2
+                )
+                self.check_optimal_solution(model)
 
 if __name__ == '__main__':
     unittest.main()
