@@ -40,7 +40,7 @@ else:
     not differentiate_available, 'Symbolic differentiation is not available'
 )
 class TestMindtPy(unittest.TestCase):
-    """Tests for the MindtPy solver plugin."""
+    """Tests for the MindtPy solver."""
 
     def check_optimal_solution(self, model, places=1):
         """Assert that variable values match the model's known optimum.

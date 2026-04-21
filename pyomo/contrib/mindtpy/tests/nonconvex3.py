@@ -8,17 +8,24 @@
 # ____________________________________________________________________________________
 
 # -*- coding: utf-8 -*-
-"""Problem C in paper 'Outer approximation algorithms for separable nonconvex mixed-integer nonlinear programs'.
+"""Nonconvex MINLP test model based on problem C from a benchmark study.
 
-The problem in the paper has two optimal solution. Variable y4 and y6 are symmetric. Therefore, we remove variable y6 for simplification.
+The expected optimal solution value is 31.
 
-Ref:
-Kesavan P, Allgor R J, Gatzke E P, et al. Outer approximation algorithms for separable nonconvex mixed-integer nonlinear programs[J]. Mathematical Programming, 2004, 100(3): 517-535.
+The published benchmark has two symmetric optimal solutions in ``y4`` and
+``y6``. This simplified test variant removes ``y6``, so the Pyomo model uses
+five binary variables.
 
-Problem type:   nonconvex MINLP
-        size:   6  binary variable
-                2  continuous variables
-                6  constraints
+References
+----------
+Kesavan, P., Allgor, R. J., Gatzke, E. P., et al. (2004). Outer approximation
+algorithms for separable nonconvex mixed-integer nonlinear programs.
+Mathematical Programming, 100(3), 517-535.
+
+    Problem type:    nonconvex MINLP
+        size:    5  binary variables
+             2  continuous variables
+             6  constraints
 
 """
 

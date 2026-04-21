@@ -1838,12 +1838,12 @@ class _MindtPyAlgorithm:
     # mip_solve.py
 
     def solve_main(self):
-        """This function solves the MIP main problem.
+        """Solve the current main MIP.
 
         Returns
         -------
-        self.mip : Pyomo model
-            The MIP stored in self.
+        self.mip : Block
+            Current main MIP model.
         main_mip_results : SolverResults
             Results from solving the main MIP.
         """
@@ -1902,12 +1902,12 @@ class _MindtPyAlgorithm:
         return self.mip, main_mip_results
 
     def solve_fp_main(self):
-        """This function solves the MIP main problem.
+        """Solve the feasibility-pump main MIP.
 
         Returns
         -------
-        self.mip : Pyomo model
-            The MIP stored in self.
+        self.mip : Block
+            Current feasibility-pump main MIP model.
         main_mip_results : SolverResults
             Results from solving the main MIP.
         """
@@ -1939,12 +1939,12 @@ class _MindtPyAlgorithm:
         return self.mip, main_mip_results
 
     def solve_regularization_main(self):
-        """This function solves the MIP main problem.
+        """Solve the regularization main MIP.
 
         Returns
         -------
-        self.mip : Pyomo model
-            The MIP stored in self.
+        self.mip : Block
+            Current regularization main MIP model.
         main_mip_results : SolverResults
             Results from solving the main MIP.
         """
@@ -2036,8 +2036,8 @@ class _MindtPyAlgorithm:
 
         Parameters
         ----------
-        main_mip : Pyomo model
-            The MIP main problem.
+        main_mip : Block
+            Current main MIP model.
         update_bound : bool, optional
             Whether to update the dual bound, by default True.
             The dual bound is not updated when handling the regularization
@@ -2109,17 +2109,17 @@ class _MindtPyAlgorithm:
     def handle_main_max_timelimit(self, main_mip, main_mip_results):
         """Handle a time-limited solve of the main MIP.
 
-        This function copies the current main_MIP model values to
+        This function copies the current ``main_mip`` variable values to
         ``fixed_nlp`` for warm starting the NLP subproblem, updates the
         suboptimal dual bound from solver-reported bounds, and logs the
         time-limit event.
 
         Parameters
         ----------
-        main_mip : Pyomo model
-            The MIP main problem.
+        main_mip : Block
+            Current main MIP model.
         main_mip_results : SolverResults
-            Results from solving the MIP main subproblem.
+            Results from solving the main MIP.
         """
         # If we have found a valid feasible solution, we take that. If not, we can at least use the dual bound.
         MindtPy = main_mip.MindtPy_utils
@@ -2143,15 +2143,12 @@ class _MindtPyAlgorithm:
         )
 
     def handle_main_unbounded(self, main_mip):
-        """Handle an unbounded solve of the main MIP relaxation.
-
-        This function handles the result of the latest iteration of solving the MIP
-        problem given an unbounded solution due to the relaxation.
+        """Resolve an unbounded main MIP relaxation by bounding the objective.
 
         Parameters
         ----------
-        main_mip : Pyomo model
-            The MIP main problem.
+        main_mip : Block
+            Current main MIP model.
 
         Returns
         -------
@@ -2202,8 +2199,8 @@ class _MindtPyAlgorithm:
 
         Parameters
         ----------
-        main_mip : Pyomo model
-            The MIP main problem.
+        main_mip : Block
+            Current regularization main MIP model.
         main_mip_results : SolverResults
             Results from solving the regularization main subproblem.
 

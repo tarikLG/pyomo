@@ -8,11 +8,12 @@
 # ____________________________________________________________________________________
 
 # -*- coding: utf-8 -*-
-"""MINLP test model from Dr. David Bernal's PhD thesis proposal.
+"""MINLP test model adapted from material in David Bernal's PhD thesis proposal.
 
 References
 ----------
-Bernal, D. E. (PhD thesis proposal). Convex MINLP project update.
+Bernal, D. E. Convex MINLP project update derived from the thesis-proposal
+material.
 ResearchGate project page: https://www.researchgate.net/project/Convex-MINLP/update/5c7eb2ee3843b034242e9e4a
 """
 
@@ -30,7 +31,7 @@ from pyomo.common.collections import ComponentMap
 
 
 class FromProposalModel(ConcreteModel):
-    """MINLP test model from Dr. David Bernal's PhD thesis proposal."""
+    """MINLP benchmark adapted from David Bernal's PhD thesis proposal material."""
 
     def __init__(self, *args, **kwargs):
         """Create the problem.

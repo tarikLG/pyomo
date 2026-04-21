@@ -7,7 +7,7 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
-"""Example in the online doc.
+"""Compact MINLP example mirrored from the MindtPy online documentation.
 
 The expected optimal solution value is 2.438447187191098.
 
@@ -31,7 +31,7 @@ from pyomo.common.collections import ComponentMap
 
 
 class OnlineDocExample(ConcreteModel):
-    """Compact MINLP example used in MindtPy online documentation tests."""
+    """Compact MINLP benchmark used in documentation and regression tests."""
 
     def __init__(self, *args, **kwargs):
         """Create the problem.

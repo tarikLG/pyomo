@@ -44,7 +44,7 @@ model_list = [
 )
 @unittest.skipIf(not pyomo_mcpp.mcpp_available(), 'MC++ is not available')
 class TestMindtPy(unittest.TestCase):
-    """Tests for the MindtPy solver plugin."""
+    """Tests for the MindtPy solver."""
 
     def check_optimal_solution(self, model, places=1):
         """Assert that variable values match the model's known optimum.

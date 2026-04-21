@@ -179,8 +179,8 @@ if egb_available:
         Parameters
         ----------
         model_block : Block
-            Block that receives the ``egb`` component used by
-            ``minlp_simple.MinlpSimple``.
+            Block on a ``MinlpSimple`` test instance that receives the
+            ``egb`` component when grey-box coverage is enabled.
         """
         ex_model = GreyBoxModel(initial={"X1": 0, "X2": 0, "Y1": 0, "Y2": 1, "Y3": 1})
         model_block.egb = egb.ExternalGreyBoxBlock()
