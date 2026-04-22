@@ -153,12 +153,14 @@ class TestMindtPy(unittest.TestCase):
                 opt.num_no_good_cuts_added = {opt.primal_bound: valid_no_good_cuts_num}
                 opt.config.add_no_good_cuts = True
                 opt.config.use_tabu_list = True
-                opt.integer_list = list(no_good_cuts.keys())
+                cut_keys = list(no_good_cuts.keys())
+                opt.integer_list = cut_keys.copy()
 
                 opt.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
 
+                active_cut_keys = set(cut_keys[:valid_no_good_cuts_num])
                 for i in no_good_cuts:
-                    if i <= valid_no_good_cuts_num:
+                    if i in active_cut_keys:
                         self.assertTrue(no_good_cuts[i].active)
                     else:
                         self.assertFalse(no_good_cuts[i].active)
