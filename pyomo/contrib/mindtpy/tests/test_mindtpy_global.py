@@ -19,7 +19,7 @@ from pyomo.contrib.mindtpy.tests.nonconvex2 import Nonconvex2
 from pyomo.contrib.mindtpy.tests.nonconvex3 import Nonconvex3
 from pyomo.contrib.mindtpy.tests.nonconvex4 import Nonconvex4
 from pyomo.environ import ConstraintList
-from pyomo.environ import SolverFactory, value
+from pyomo.environ import SolverFactory, minimize, value
 from pyomo.opt import TerminationCondition
 
 required_solvers = ('baron', 'cplex_persistent')
