@@ -82,6 +82,54 @@ class TestMindtPyTopLevel(unittest.TestCase):
 
 
 class TestAlgorithmBaseClass(unittest.TestCase):
+    def _make_rnlp_algorithm(self, termination, message):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
+        algorithm.working_model = make_cut_model()
+        algorithm.mip = make_cut_model()
+        algorithm.results = SolverResults()
+        algorithm.log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 4.0
+        algorithm.rel_gap = 0.6
+        algorithm.nlp_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=termination, message=message
+                ),
+            )
+        )
+        return algorithm
+
+    def _build_regularization_setup_algorithm(
+        self, add_regularization, single_tree=False, sense=minimize
+    ):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(
+            add_regularization=add_regularization,
+            add_no_good_cuts=True,
+            single_tree=single_tree,
+        )
+        algorithm.objective_sense = sense
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 4.0
+        algorithm.best_solution_found = make_cut_model(sense=sense)
+        algorithm.mip = make_cut_model(sense=sense)
+        algorithm.mip_constraint_polynomial_degree = {0, 1, 2}
+        algorithm.mip_objective_polynomial_degree = {2}
+        mindtpy = algorithm.mip.MindtPy_utils
+        mindtpy.mip_obj = Objective(expr=algorithm.mip.x)
+        mindtpy.objective_constr = Constraint(expr=algorithm.mip.x >= -2)
+        mindtpy.objective_constr.deactivate()
+        mindtpy.objective_value = VarList()
+        mindtpy.objective_value.add()
+        mindtpy.objective_value[1].set_value(1.0)
+        if single_tree:
+            mindtpy.roa_proj_mip_obj = Objective(expr=algorithm.mip.x)
+            mindtpy.cuts.obj_reg_estimate = Constraint(expr=algorithm.mip.x >= -2)
+        return algorithm
+
     def test_set_up_solve_data_covers_constant_objective_and_quadratic_modes(self):
         constant_model = ConcreteModel()
         constant_model.x = Var(bounds=(-1, 1), initialize=0.0)
@@ -466,7 +514,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         other_results.solution.status = SolutionStatus.feasible
         self.assertFalse(fp_algorithm.handle_fp_main_tc(other_results))
 
-    def test_initialization_and_init_rnlp_cover_failure_modes(self):
+    def test_initialization_raises_for_missing_initial_binary_values(self):
         init_algorithm = make_algorithm()
         init_algorithm.config = make_config(init_strategy='initial_binary')
         init_algorithm.working_model = make_cut_model()
@@ -482,22 +530,9 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             ):
                 init_algorithm.MindtPy_initialization()
 
-        feasible_algorithm = make_algorithm()
-        feasible_algorithm.config = make_config()
-        feasible_algorithm.working_model = make_cut_model()
-        feasible_algorithm.mip = make_cut_model()
-        feasible_algorithm.results = SolverResults()
-        feasible_algorithm.log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
-        feasible_algorithm.primal_bound = 10.0
-        feasible_algorithm.dual_bound = 4.0
-        feasible_algorithm.rel_gap = 0.6
-        feasible_algorithm.nlp_opt = FakeSolver(
-            solve_result=SimpleNamespace(
-                solution=[],
-                solver=SimpleNamespace(
-                    termination_condition=tc.feasible, message='suboptimal rNLP'
-                ),
-            )
+    def test_init_rnlp_updates_suboptimal_bound_for_feasible_termination(self):
+        feasible_algorithm = self._make_rnlp_algorithm(
+            tc.feasible, 'suboptimal rNLP'
         )
         fake_transform = SimpleNamespace(apply_to=MagicMock())
         with (
@@ -517,19 +552,8 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             feasible_algorithm.init_rNLP(add_oa_cuts=False)
         update_dual.assert_called_once()
 
-        max_time_algorithm = make_algorithm()
-        max_time_algorithm.config = make_config()
-        max_time_algorithm.working_model = make_cut_model()
-        max_time_algorithm.mip = make_cut_model()
-        max_time_algorithm.results = SolverResults()
-        max_time_algorithm.nlp_opt = FakeSolver(
-            solve_result=SimpleNamespace(
-                solution=[],
-                solver=SimpleNamespace(
-                    termination_condition=tc.maxTimeLimit, message='timeout'
-                ),
-            )
-        )
+    def test_init_rnlp_sets_max_time_limit_result(self):
+        max_time_algorithm = self._make_rnlp_algorithm(tc.maxTimeLimit, 'timeout')
         with (
             patch.object(
                 algorithm_base_class,
@@ -543,19 +567,9 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             max_time_algorithm.results.solver.termination_condition, tc.maxTimeLimit
         )
 
-        max_iter_algorithm = make_algorithm()
-        max_iter_algorithm.config = make_config()
-        max_iter_algorithm.working_model = make_cut_model()
-        max_iter_algorithm.mip = make_cut_model()
-        max_iter_algorithm.results = SolverResults()
-        max_iter_algorithm.nlp_opt = FakeSolver(
-            solve_result=SimpleNamespace(
-                solution=[],
-                solver=SimpleNamespace(
-                    termination_condition=tc.maxIterations,
-                    message='iteration limit reached',
-                ),
-            )
+    def test_init_rnlp_leaves_unknown_result_for_iteration_limit(self):
+        max_iter_algorithm = self._make_rnlp_algorithm(
+            tc.maxIterations, 'iteration limit reached'
         )
         with (
             patch.object(
@@ -570,18 +584,8 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             max_iter_algorithm.results.solver.termination_condition, tc.unknown
         )
 
-        error_algorithm = make_algorithm()
-        error_algorithm.config = make_config()
-        error_algorithm.working_model = make_cut_model()
-        error_algorithm.mip = make_cut_model()
-        error_algorithm.nlp_opt = FakeSolver(
-            solve_result=SimpleNamespace(
-                solution=[],
-                solver=SimpleNamespace(
-                    termination_condition=tc.error, message='unhandled rNLP error'
-                ),
-            )
-        )
+    def test_init_rnlp_raises_on_unhandled_termination(self):
+        error_algorithm = self._make_rnlp_algorithm(tc.error, 'unhandled rNLP error')
         with (
             patch.object(
                 algorithm_base_class,
@@ -1230,7 +1234,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             algorithm.handle_main_unbounded(main_mip)
         load_from.assert_called_once()
 
-    def test_regularization_setup_and_handlers(self):
+    def test_handle_regularization_main_tc_covers_supported_and_error_paths(self):
         algorithm = make_algorithm()
         algorithm.results = SolverResults()
         algorithm.config = make_config()
@@ -1257,6 +1261,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                 make_results(termination=tc.error, message='bad regularization solve'),
             )
 
+    def test_solve_regularization_main_cleans_up_projection_components(self):
         regularization_algorithm = make_algorithm()
         regularization_algorithm.config = make_config(
             mip_regularization_solver='cplex_persistent', add_regularization='level_L1'
@@ -1313,6 +1318,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             regularization_algorithm.mip.MindtPy_utils.component('L1_obj')
         )
 
+    def test_solve_regularization_main_distinguishes_infeasible_or_unbounded(self):
         distinguish_regularization = make_algorithm()
         distinguish_regularization.config = make_config(
             mip_regularization_solver='gurobi', add_regularization='level_L2'
@@ -1349,7 +1355,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             distinguish_regularization.solve_regularization_main()
         distinguish.assert_called_once()
 
-    def test_setup_fp_and_regularization_main_branches(self):
+    def test_setup_fp_main_supports_l2_and_l_infinity_norms(self):
         fp_algorithm = make_algorithm()
         fp_algorithm.mip = make_cut_model()
         fp_algorithm.working_model = make_cut_model()
@@ -1380,35 +1386,10 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             fp_algorithm.setup_fp_main()
         self.assertIsNotNone(fp_algorithm.mip.MindtPy_utils.fp_mip_obj)
 
-        def build_regularization_algorithm(
-            add_regularization, single_tree=False, sense=minimize
-        ):
-            algorithm = make_algorithm()
-            algorithm.config = make_config(
-                add_regularization=add_regularization,
-                add_no_good_cuts=True,
-                single_tree=single_tree,
-            )
-            algorithm.objective_sense = sense
-            algorithm.primal_bound = 10.0
-            algorithm.dual_bound = 4.0
-            algorithm.best_solution_found = make_cut_model(sense=sense)
-            algorithm.mip = make_cut_model(sense=sense)
-            algorithm.mip_constraint_polynomial_degree = {0, 1, 2}
-            algorithm.mip_objective_polynomial_degree = {2}
-            mindtpy = algorithm.mip.MindtPy_utils
-            mindtpy.mip_obj = Objective(expr=algorithm.mip.x)
-            mindtpy.objective_constr = Constraint(expr=algorithm.mip.x >= -2)
-            mindtpy.objective_constr.deactivate()
-            mindtpy.objective_value = VarList()
-            mindtpy.objective_value.add()
-            mindtpy.objective_value[1].set_value(1.0)
-            if single_tree:
-                mindtpy.roa_proj_mip_obj = Objective(expr=algorithm.mip.x)
-                mindtpy.cuts.obj_reg_estimate = Constraint(expr=algorithm.mip.x >= -2)
-            return algorithm
-
-        level_l1 = build_regularization_algorithm('level_L1', single_tree=True)
+    def test_setup_regularization_main_builds_expected_projection_components(self):
+        level_l1 = self._build_regularization_setup_algorithm(
+            'level_L1', single_tree=True
+        )
         with patch.object(
             algorithm_base_class,
             'generate_norm1_objective_function',
@@ -1419,7 +1400,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertTrue(level_l1.mip.MindtPy_utils.cuts.no_good_cuts.active)
         self.assertIsNotNone(level_l1.mip.MindtPy_utils.roa_proj_mip_obj)
 
-        level_l2 = build_regularization_algorithm('level_L2')
+        level_l2 = self._build_regularization_setup_algorithm('level_L2')
         with patch.object(
             algorithm_base_class,
             'generate_norm2sq_objective_function',
@@ -1428,7 +1409,9 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             level_l2.setup_regularization_main()
         self.assertIsNotNone(level_l2.mip.MindtPy_utils.roa_proj_mip_obj)
 
-        level_linf = build_regularization_algorithm('level_L_infinity', sense=maximize)
+        level_linf = self._build_regularization_setup_algorithm(
+            'level_L_infinity', sense=maximize
+        )
         with patch.object(
             algorithm_base_class,
             'generate_norm_inf_objective_function',
@@ -1438,7 +1421,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertIsNotNone(level_linf.mip.MindtPy_utils.roa_proj_mip_obj)
         self.assertTrue(level_linf.mip.MindtPy_utils.cuts.obj_reg_estimate.active)
 
-        lag_algorithm = build_regularization_algorithm('grad_lag')
+        lag_algorithm = self._build_regularization_setup_algorithm('grad_lag')
         with patch.object(
             algorithm_base_class,
             'generate_lag_objective_function',
@@ -2013,12 +1996,13 @@ class TestCutGeneration(unittest.TestCase):
             cut_generation.add_affine_cuts(error_model, good_config, {})
         self.assertEqual(len(error_model.MindtPy_utils.cuts.aff_cuts), 0)
 
-    def test_add_affine_cuts_handles_missing_values_and_nonfinite_mccormick_data(self):
+    def test_add_affine_cuts_skips_constraints_with_missing_values(self):
         missing_value_model = make_cut_model(include_binary=False, upper=2.0)
         missing_value_model.x.set_value(None, skip_validation=True)
         cut_generation.add_affine_cuts(missing_value_model, make_config(), {})
         self.assertEqual(len(missing_value_model.MindtPy_utils.cuts.aff_cuts), 0)
 
+    def test_add_affine_cuts_keeps_valid_side_when_other_slope_is_nan(self):
         nan_model = make_cut_model(include_binary=False, upper=2.0)
 
         class NaNMcCormick:
@@ -2079,6 +2063,7 @@ class TestCutGeneration(unittest.TestCase):
             cut_generation.add_affine_cuts(nan_convex_model, make_config(), {})
         self.assertEqual(len(nan_convex_model.MindtPy_utils.cuts.aff_cuts), 1)
 
+    def test_add_affine_cuts_skips_nonfinite_or_zero_mccormick_data(self):
         invalid_model = make_cut_model(include_binary=False, upper=2.0)
 
         class InvalidMcCormick:
