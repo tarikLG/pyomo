@@ -82,6 +82,38 @@ class TestMindtPyTopLevel(unittest.TestCase):
 
 
 class TestAlgorithmBaseClass(unittest.TestCase):
+    def test_set_up_solve_data_covers_constant_objective_and_quadratic_modes(self):
+        constant_model = ConcreteModel()
+        constant_model.x = Var(bounds=(-1, 1), initialize=0.0)
+        constant_model.obj = Objective(expr=5.0)
+        constant_model.c = Constraint(expr=constant_model.x >= -0.5)
+
+        algorithm = make_algorithm()
+        algorithm.config = make_config(use_fbbt=True, quadratic_strategy=1)
+        with patch.object(algorithm_base_class, 'fbbt') as fbbt:
+            algorithm.set_up_solve_data(constant_model)
+
+        self.assertFalse(algorithm.config.use_dual_bound)
+        fbbt.assert_called_once_with(constant_model)
+        self.assertEqual(algorithm.mip_objective_polynomial_degree, {0, 1, 2})
+        self.assertEqual(algorithm.mip_constraint_polynomial_degree, {0, 1})
+        self.assertTrue(hasattr(algorithm.working_model, 'ipopt_zL_out'))
+        self.assertTrue(hasattr(algorithm.working_model, 'ipopt_zU_out'))
+
+        maximize_model = ConcreteModel()
+        maximize_model.x = Var(bounds=(-1, 2), initialize=0.5)
+        maximize_model.obj = Objective(expr=maximize_model.x**2, sense=maximize)
+        maximize_model.c = Constraint(expr=maximize_model.x <= 1.5)
+
+        quadratic_algorithm = make_algorithm()
+        quadratic_algorithm.config = make_config(quadratic_strategy=2)
+        quadratic_algorithm.set_up_solve_data(maximize_model)
+        self.assertEqual(
+            quadratic_algorithm.mip_constraint_polynomial_degree, {0, 1, 2}
+        )
+        self.assertEqual(quadratic_algorithm.primal_bound, float('-inf'))
+        self.assertEqual(quadratic_algorithm.dual_bound, float('inf'))
+
     def test_model_is_valid_short_circuits_linear_program_with_persistent_solver(self):
         model = make_core_model(with_binary=False, nonlinear=False)
         algorithm = make_algorithm(model=model)
@@ -247,6 +279,84 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertFalse(appsi_algorithm.nlp_load_solutions)
         self.assertFalse(appsi_algorithm.regularization_mip_load_solutions)
 
+    def test_check_subsolver_validity_reports_availability_and_license_failures(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(
+            add_regularization='level_L1',
+            mip_regularization_solver='cplex_persistent',
+        )
+
+        error_cases = [
+            (
+                'glpk is not available',
+                FakeSolver(available=False),
+                FakeSolver(),
+                FakeSolver(),
+            ),
+            (
+                'glpk is not licensed',
+                FakeSolver(licensed=False),
+                FakeSolver(),
+                FakeSolver(),
+            ),
+            (
+                'ipopt is not available',
+                FakeSolver(),
+                FakeSolver(available=False),
+                FakeSolver(),
+            ),
+            (
+                'ipopt is not licensed',
+                FakeSolver(),
+                FakeSolver(licensed=False),
+                FakeSolver(),
+            ),
+            (
+                'cplex_persistent is not available',
+                FakeSolver(),
+                FakeSolver(),
+                FakeSolver(available=False),
+            ),
+            (
+                'cplex_persistent is not licensed',
+                FakeSolver(),
+                FakeSolver(),
+                FakeSolver(licensed=False),
+            ),
+        ]
+
+        for message, mip_opt, nlp_opt, reg_opt in error_cases:
+            algorithm.mip_opt = mip_opt
+            algorithm.nlp_opt = nlp_opt
+            algorithm.regularization_mip_opt = reg_opt
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    algorithm.check_subsolver_validity()
+
+    def test_check_config_covers_baron_gams_and_tabu_adjustments(self):
+        baron_algorithm = make_algorithm()
+        baron_algorithm.config = make_config(
+            nlp_solver='baron', equality_relaxation=True
+        )
+        baron_algorithm.check_config()
+        self.assertFalse(baron_algorithm.config.equality_relaxation)
+
+        gams_algorithm = make_algorithm()
+        gams_algorithm.config = make_config(
+            nlp_solver='gams', equality_relaxation=True
+        )
+        gams_algorithm.config.nlp_solver_args['solver'] = 'baron'
+        gams_algorithm.check_config()
+        self.assertFalse(gams_algorithm.config.equality_relaxation)
+
+        tabu_algorithm = make_algorithm()
+        tabu_algorithm.config = make_config(
+            use_tabu_list=True, mip_solver='glpk', threads=4
+        )
+        tabu_algorithm.check_config()
+        self.assertEqual(tabu_algorithm.config.mip_solver, 'cplex_persistent')
+        self.assertEqual(tabu_algorithm.config.threads, 1)
+
     def test_set_up_callbacks_and_solution_pool_names(self):
         algorithm = make_algorithm()
         algorithm.config.mip_solver = 'cplex_persistent'
@@ -355,6 +465,229 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         other_results = make_results(termination=tc.other)
         other_results.solution.status = SolutionStatus.feasible
         self.assertFalse(fp_algorithm.handle_fp_main_tc(other_results))
+
+    def test_initialization_and_init_rnlp_cover_failure_modes(self):
+        init_algorithm = make_algorithm()
+        init_algorithm.config = make_config(init_strategy='initial_binary')
+        init_algorithm.working_model = make_cut_model()
+        init_algorithm.mip = make_cut_model()
+        init_algorithm.integer_solution_to_cuts_index = {}
+        with patch.object(
+            algorithm_base_class,
+            'get_integer_solution',
+            side_effect=TypeError('missing integer values'),
+        ):
+            with self.assertRaisesRegex(
+                ValueError, 'initial integer combination is not provided'
+            ):
+                init_algorithm.MindtPy_initialization()
+
+        feasible_algorithm = make_algorithm()
+        feasible_algorithm.config = make_config()
+        feasible_algorithm.working_model = make_cut_model()
+        feasible_algorithm.mip = make_cut_model()
+        feasible_algorithm.results = SolverResults()
+        feasible_algorithm.log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+        feasible_algorithm.primal_bound = 10.0
+        feasible_algorithm.dual_bound = 4.0
+        feasible_algorithm.rel_gap = 0.6
+        feasible_algorithm.nlp_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.feasible, message='suboptimal rNLP'
+                ),
+            )
+        )
+        fake_transform = SimpleNamespace(apply_to=MagicMock())
+        with (
+            patch.object(
+                algorithm_base_class,
+                'TransformationFactory',
+                return_value=fake_transform,
+            ),
+            patch.object(algorithm_base_class, 'update_solver_timelimit'),
+            patch.object(
+                algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
+            ),
+            patch.object(
+                feasible_algorithm, 'update_suboptimal_dual_bound'
+            ) as update_dual,
+        ):
+            feasible_algorithm.init_rNLP(add_oa_cuts=False)
+        update_dual.assert_called_once()
+
+        max_time_algorithm = make_algorithm()
+        max_time_algorithm.config = make_config()
+        max_time_algorithm.working_model = make_cut_model()
+        max_time_algorithm.mip = make_cut_model()
+        max_time_algorithm.results = SolverResults()
+        max_time_algorithm.nlp_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.maxTimeLimit, message='timeout'
+                ),
+            )
+        )
+        with (
+            patch.object(
+                algorithm_base_class,
+                'TransformationFactory',
+                return_value=SimpleNamespace(apply_to=MagicMock()),
+            ),
+            patch.object(algorithm_base_class, 'update_solver_timelimit'),
+        ):
+            max_time_algorithm.init_rNLP(add_oa_cuts=False)
+        self.assertIs(
+            max_time_algorithm.results.solver.termination_condition, tc.maxTimeLimit
+        )
+
+        max_iter_algorithm = make_algorithm()
+        max_iter_algorithm.config = make_config()
+        max_iter_algorithm.working_model = make_cut_model()
+        max_iter_algorithm.mip = make_cut_model()
+        max_iter_algorithm.results = SolverResults()
+        max_iter_algorithm.nlp_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.maxIterations,
+                    message='iteration limit reached',
+                ),
+            )
+        )
+        with (
+            patch.object(
+                algorithm_base_class,
+                'TransformationFactory',
+                return_value=SimpleNamespace(apply_to=MagicMock()),
+            ),
+            patch.object(algorithm_base_class, 'update_solver_timelimit'),
+        ):
+            max_iter_algorithm.init_rNLP(add_oa_cuts=False)
+        self.assertIs(
+            max_iter_algorithm.results.solver.termination_condition, tc.unknown
+        )
+
+        error_algorithm = make_algorithm()
+        error_algorithm.config = make_config()
+        error_algorithm.working_model = make_cut_model()
+        error_algorithm.mip = make_cut_model()
+        error_algorithm.nlp_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.error, message='unhandled rNLP error'
+                ),
+            )
+        )
+        with (
+            patch.object(
+                algorithm_base_class,
+                'TransformationFactory',
+                return_value=SimpleNamespace(apply_to=MagicMock()),
+            ),
+            patch.object(algorithm_base_class, 'update_solver_timelimit'),
+        ):
+            with self.assertRaisesRegex(
+                ValueError, 'unable to handle relaxed NLP termination condition'
+            ):
+                error_algorithm.init_rNLP(add_oa_cuts=False)
+
+    def test_init_max_binaries_covers_persistent_and_termination_branches(self):
+        optimal_algorithm = make_algorithm()
+        optimal_algorithm.config = make_config()
+        optimal_algorithm.working_model = make_cut_model()
+        optimal_algorithm.results = SolverResults()
+        optimal_algorithm.primal_bound = 10.0
+        optimal_algorithm.dual_bound = 4.0
+        optimal_algorithm.rel_gap = 0.6
+        optimal_algorithm.log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+        optimal_algorithm.timing = {}
+        optimal_algorithm.mip_load_solutions = True
+        optimal_results = SimpleNamespace(
+            solution=[object()],
+            solver=SimpleNamespace(
+                termination_condition=tc.optimal, message='optimal max-binary'
+            ),
+        )
+        optimal_algorithm.mip_opt = FakePersistentSolver(solve_result=optimal_results)
+        with (
+            patch.object(algorithm_base_class, 'PersistentSolver', FakePersistentBase),
+            patch.object(algorithm_base_class, 'update_solver_timelimit'),
+            patch.object(
+                algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
+            ),
+            patch.object(algorithm_base_class, 'copy_var_list_values') as copy_values,
+            patch(
+                'pyomo.core.base.PyomoModel.ModelSolutions.load_from',
+                return_value=None,
+            ),
+        ):
+            optimal_algorithm.init_max_binaries()
+        self.assertFalse(hasattr(optimal_algorithm.mip_opt.instance, 'dual'))
+        copy_values.assert_called_once()
+
+        termination_cases = [
+            (tc.infeasible, 'MIP main problem is infeasible'),
+            (tc.error, 'unable to handle MILP main termination condition'),
+        ]
+        for termination, message in termination_cases:
+            algorithm = make_algorithm()
+            algorithm.config = make_config()
+            algorithm.working_model = make_cut_model()
+            algorithm.results = SolverResults()
+            algorithm.mip_opt = FakeSolver(
+                solve_result=SimpleNamespace(
+                    solution=[],
+                    solver=SimpleNamespace(
+                        termination_condition=termination, message=message
+                    ),
+                )
+            )
+            with (
+                patch.object(algorithm_base_class, 'update_solver_timelimit'),
+            ):
+                with self.subTest(termination=termination):
+                    with self.assertRaisesRegex(ValueError, message):
+                        algorithm.init_max_binaries()
+
+        time_limit_algorithm = make_algorithm()
+        time_limit_algorithm.config = make_config()
+        time_limit_algorithm.working_model = make_cut_model()
+        time_limit_algorithm.results = SolverResults()
+        time_limit_algorithm.mip_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.maxTimeLimit, message='max time'
+                ),
+            )
+        )
+        with patch.object(algorithm_base_class, 'update_solver_timelimit'):
+            time_limit_algorithm.init_max_binaries()
+        self.assertIs(
+            time_limit_algorithm.results.solver.termination_condition, tc.maxTimeLimit
+        )
+
+        max_iter_algorithm = make_algorithm()
+        max_iter_algorithm.config = make_config()
+        max_iter_algorithm.working_model = make_cut_model()
+        max_iter_algorithm.results = SolverResults()
+        max_iter_algorithm.mip_opt = FakeSolver(
+            solve_result=SimpleNamespace(
+                solution=[],
+                solver=SimpleNamespace(
+                    termination_condition=tc.maxIterations, message='max iterations'
+                ),
+            )
+        )
+        with patch.object(algorithm_base_class, 'update_solver_timelimit'):
+            max_iter_algorithm.init_max_binaries()
+        self.assertIs(
+            max_iter_algorithm.results.solver.termination_condition, tc.unknown
+        )
 
     def test_subproblem_and_main_problem_handlers(self):
         algorithm = make_algorithm()
@@ -499,6 +832,57 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         handle_main_infeasible.assert_called()
         handle_main_unbounded.assert_called()
         handle_main_max_timelimit.assert_called()
+
+    def test_handle_main_mip_termination_covers_feasible_and_none_paths(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
+        algorithm.results = SolverResults()
+        algorithm.fixed_nlp = make_cut_model()
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 4.0
+        algorithm.rel_gap = 0.6
+        algorithm.mip_iter = 1
+        algorithm.timing = {}
+        algorithm.log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+
+        main_mip = make_cut_model()
+        main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
+
+        with (
+            patch.object(algorithm_base_class, 'copy_var_list_values') as copy_values,
+            patch.object(
+                algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
+            ),
+            patch.object(
+                algorithm, 'update_suboptimal_dual_bound'
+            ) as update_suboptimal_dual_bound,
+        ):
+            should_terminate = algorithm.handle_main_mip_termination(
+                main_mip, make_results(termination=tc.feasible)
+            )
+        self.assertFalse(should_terminate)
+        copy_values.assert_called_once()
+        update_suboptimal_dual_bound.assert_called_once()
+
+        other_results = make_results(termination=tc.other)
+        other_results.solution.status = SolutionStatus.feasible
+        with (
+            patch.object(algorithm_base_class, 'copy_var_list_values') as copy_values,
+            patch.object(
+                algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
+            ),
+            patch.object(
+                algorithm, 'update_suboptimal_dual_bound'
+            ) as update_suboptimal_dual_bound,
+        ):
+            should_terminate = algorithm.handle_main_mip_termination(
+                main_mip, other_results
+            )
+        self.assertFalse(should_terminate)
+        copy_values.assert_called_once()
+        update_suboptimal_dual_bound.assert_called_once()
+
+        self.assertTrue(algorithm.handle_main_mip_termination(main_mip, None))
 
     def test_solve_subproblem_covers_restore_load_and_infeasible_paths(self):
         algorithm = make_algorithm()
@@ -1060,6 +1444,99 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         algorithm.handle_feasibility_subproblem_tc(tc.infeasible, mindtpy)
         self.assertTrue(algorithm.should_terminate)
 
+    def test_iteration_loop_covers_single_tree_regularization_path(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(
+            single_tree=True, add_regularization='level_L1'
+        )
+        algorithm.config.iteration_limit = 1
+        algorithm.timing = {}
+        algorithm.mip = make_cut_model()
+        algorithm.fixed_nlp = make_cut_model()
+        algorithm.integer_list = []
+        algorithm.solve_main = MagicMock(return_value=(make_cut_model(), make_results()))
+        algorithm.handle_main_mip_termination = MagicMock(side_effect=[False, True])
+        algorithm.add_regularization = MagicMock()
+        algorithm.solve_subproblem = MagicMock(
+            return_value=(algorithm.fixed_nlp, make_results())
+        )
+        algorithm.handle_nlp_subproblem_tc = MagicMock()
+        algorithm.algorithm_should_terminate = MagicMock(return_value=True)
+        algorithm.config.call_before_subproblem_solve = MagicMock()
+
+        with (
+            patch.object(
+                algorithm_base_class, 'get_integer_solution', return_value=(1,)
+            ),
+            patch.object(algorithm_base_class, 'copy_var_list_values') as copy_values,
+        ):
+            algorithm.MindtPy_iteration_loop()
+
+        algorithm.add_regularization.assert_not_called()
+        copy_values.assert_called_once()
+        algorithm.config.call_before_subproblem_solve.assert_called_once_with(
+            algorithm.fixed_nlp
+        )
+        algorithm.solve_subproblem.assert_called_once()
+        algorithm.handle_nlp_subproblem_tc.assert_called_once()
+        self.assertFalse(algorithm.last_iter_cuts)
+
+    def test_iteration_loop_covers_solution_pool_replay_and_skip(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(solution_pool=True)
+        algorithm.config.iteration_limit = 1
+        algorithm.timing = {}
+        algorithm.mip = make_cut_model()
+        algorithm.fixed_nlp = make_cut_model()
+        algorithm.integer_list = [(1,)]
+        algorithm.solve_main = MagicMock(
+            return_value=(
+                make_cut_model(),
+                SimpleNamespace(
+                    _solver_model='solver-model',
+                    _pyomo_var_to_solver_var_map='var-map',
+                ),
+            )
+        )
+        algorithm.handle_main_mip_termination = MagicMock(side_effect=[False, True])
+        algorithm.get_solution_name_obj = MagicMock(
+            return_value=[('first', 1.0), ('repeat', 2.0), ('new', 3.0)]
+        )
+        algorithm.solve_subproblem = MagicMock(
+            return_value=(algorithm.fixed_nlp, make_results())
+        )
+        algorithm.handle_nlp_subproblem_tc = MagicMock()
+        algorithm.algorithm_should_terminate = MagicMock(
+            side_effect=[False, False, True]
+        )
+        algorithm.config.call_before_subproblem_solve = MagicMock()
+        algorithm.config.call_after_subproblem_solve = MagicMock()
+        algorithm.config.call_after_main_solve = MagicMock()
+
+        with (
+            patch.object(
+                algorithm_base_class, 'copy_var_list_values_from_solution_pool'
+            ) as copy_from_solution_pool,
+            patch.object(
+                algorithm_base_class,
+                'get_integer_solution',
+                side_effect=[(1,), (2,)],
+            ),
+        ):
+            algorithm.MindtPy_iteration_loop()
+
+        self.assertEqual(copy_from_solution_pool.call_count, 2)
+        self.assertEqual(algorithm.solve_subproblem.call_count, 2)
+        self.assertEqual(algorithm.handle_nlp_subproblem_tc.call_count, 2)
+        self.assertEqual(
+            algorithm.config.call_before_subproblem_solve.call_count, 2
+        )
+        self.assertEqual(
+            algorithm.config.call_after_subproblem_solve.call_count, 2
+        )
+        self.assertEqual(algorithm.integer_list, [(1,), (2,)])
+        self.assertTrue(algorithm.last_iter_cuts)
+
 
 class TestOaAndGoaSolvers(unittest.TestCase):
     def test_goa_configuration_and_no_good_cut_bookkeeping(self):
@@ -1280,6 +1757,106 @@ class TestCutGeneration(unittest.TestCase):
         )
         self.assertGreaterEqual(len(ineq_model.MindtPy_utils.cuts.oa_cuts), 1)
 
+    def test_add_oa_cuts_covers_epigraph_lazy_cut_branches(self):
+        upper_model = make_cut_model()
+        upper_model.MindtPy_utils.objective_constr = Constraint(
+            expr=upper_model.x**2 + upper_model.y <= 2.0
+        )
+        upper_constr = upper_model.MindtPy_utils.objective_constr
+        upper_model.MindtPy_utils.constraint_list = [upper_constr]
+        upper_model.MindtPy_utils.nonlinear_constraint_list = [upper_constr]
+        upper_jacs = ComponentMap(
+            [(upper_constr, ComponentMap([(upper_model.x, 2.0), (upper_model.y, 1.0)]))]
+        )
+        upper_config = make_config(
+            add_slack=True, single_tree=True, mip_solver='gurobi_persistent'
+        )
+        upper_cb = SimpleNamespace(cbLazy=MagicMock())
+        cut_generation.add_oa_cuts(
+            upper_model,
+            [1.0],
+            upper_jacs,
+            minimize,
+            {0, 1},
+            1,
+            upper_config,
+            {},
+            cb_opt=upper_cb,
+            linearize_active=False,
+            linearize_violated=False,
+        )
+        self.assertEqual(len(upper_model.MindtPy_utils.cuts.oa_cuts), 1)
+        self.assertEqual(len(upper_model.MindtPy_utils.cuts.slack_vars), 1)
+        upper_cb.cbLazy.assert_called_once()
+
+        lower_model = make_cut_model()
+        lower_model.MindtPy_utils.objective_constr = Constraint(
+            expr=lower_model.x**2 + lower_model.y >= 2.0
+        )
+        lower_constr = lower_model.MindtPy_utils.objective_constr
+        lower_model.MindtPy_utils.constraint_list = [lower_constr]
+        lower_model.MindtPy_utils.nonlinear_constraint_list = [lower_constr]
+        lower_jacs = ComponentMap(
+            [(lower_constr, ComponentMap([(lower_model.x, 2.0), (lower_model.y, 1.0)]))]
+        )
+        lower_config = make_config(
+            add_slack=True, single_tree=True, mip_solver='gurobi_persistent'
+        )
+        lower_cb = SimpleNamespace(cbLazy=MagicMock())
+        cut_generation.add_oa_cuts(
+            lower_model,
+            [1.0],
+            lower_jacs,
+            minimize,
+            {0, 1},
+            1,
+            lower_config,
+            {},
+            cb_opt=lower_cb,
+            linearize_active=False,
+            linearize_violated=False,
+        )
+        self.assertEqual(len(lower_model.MindtPy_utils.cuts.oa_cuts), 1)
+        self.assertEqual(len(lower_model.MindtPy_utils.cuts.slack_vars), 1)
+        lower_cb.cbLazy.assert_called_once()
+
+    def test_add_oa_cuts_for_grey_box_adds_slack_when_requested(self):
+        target_model = make_cut_model()
+        target_model.grey = Block()
+        target_model.grey.inputs = VarList()
+        grey_input = target_model.grey.inputs.add()
+        grey_input.set_value(1.0)
+        target_model.grey.outputs = VarList()
+        grey_output = target_model.grey.outputs.add()
+        grey_output.set_value(2.0)
+        target_model.MindtPy_utils.grey_box_list = [target_model.grey]
+
+        class FakeJacobianModel:
+            def get_external_model(self):
+                return SimpleNamespace(
+                    evaluate_jacobian_outputs=lambda: SimpleNamespace(
+                        toarray=lambda: [[3.0]]
+                    )
+                )
+
+        jacobian_model = FakeJacobianModel()
+        jacobians_model = SimpleNamespace(
+            MindtPy_utils=SimpleNamespace(grey_box_list=[jacobian_model]),
+            dual={
+                jacobian_model: {grey_output.name.replace('outputs', 'output_constraints'): 2.0}
+            },
+        )
+
+        cut_generation.add_oa_cuts_for_grey_box(
+            target_model,
+            jacobians_model,
+            make_config(add_slack=True),
+            minimize,
+            0,
+        )
+        self.assertEqual(len(target_model.MindtPy_utils.cuts.oa_cuts), 1)
+        self.assertEqual(len(target_model.MindtPy_utils.cuts.slack_vars), 1)
+
     def test_add_ecp_cuts_and_no_good_cuts(self):
         model = ConcreteModel()
         model.x = Var(bounds=(0, 2), initialize=1.0)
@@ -1319,6 +1896,45 @@ class TestCutGeneration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'is not 0 or 1'):
             cut_generation.add_no_good_cuts(nogood_model, [1.0, 0.3], nogood_config, {})
 
+    def test_add_ecp_and_no_good_cuts_handle_skip_conditions(self):
+        model = ConcreteModel()
+        model.x = Var(bounds=(0, 2), initialize=1.0)
+        model.c1 = Constraint(expr=model.x**2 <= 0.5)
+        model.c2 = Constraint(expr=1.5 <= model.x**2)
+        model.MindtPy_utils = Block()
+        model.MindtPy_utils.nonlinear_constraint_list = [model.c1, model.c2]
+        model.MindtPy_utils.cuts = Block()
+        model.MindtPy_utils.cuts.ecp_cuts = ConstraintList()
+        model.MindtPy_utils.cuts.no_good_cuts = ConstraintList()
+        model.MindtPy_utils.cuts.slack_vars = VarList(domain=Reals)
+        config = make_config(
+            factory=extended_cutting_plane._get_MindtPy_ECP_config, ecp_tolerance=1e-6
+        )
+        jacobians = ComponentMap(
+            [
+                (model.c1, ComponentMap([(model.x, 2.0)])),
+                (model.c2, ComponentMap([(model.x, 2.0)])),
+            ]
+        )
+        with (
+            patch.object(model.c1, 'uslack', side_effect=OverflowError('bad uslack')),
+            patch.object(model.c2, 'lslack', side_effect=ValueError('bad lslack')),
+        ):
+            cut_generation.add_ecp_cuts(model, jacobians, config, {})
+        self.assertEqual(len(model.MindtPy_utils.cuts.ecp_cuts), 0)
+
+        disabled_model = make_cut_model()
+        cut_generation.add_no_good_cuts(
+            disabled_model, [1.0, 1.0], make_config(add_no_good_cuts=False), {}
+        )
+        self.assertEqual(len(disabled_model.MindtPy_utils.cuts.no_good_cuts), 0)
+
+        no_binary_model = make_cut_model(include_binary=False)
+        cut_generation.add_no_good_cuts(
+            no_binary_model, [1.0, 0.25], make_config(add_no_good_cuts=True), {}
+        )
+        self.assertEqual(len(no_binary_model.MindtPy_utils.cuts.no_good_cuts), 0)
+
     def test_add_affine_cuts_handles_valid_and_error_cases(self):
         good_model = make_cut_model(include_binary=False, upper=2.0)
         good_config = make_config()
@@ -1355,6 +1971,100 @@ class TestCutGeneration(unittest.TestCase):
         ):
             cut_generation.add_affine_cuts(error_model, good_config, {})
         self.assertEqual(len(error_model.MindtPy_utils.cuts.aff_cuts), 0)
+
+    def test_add_affine_cuts_handles_missing_values_and_nonfinite_mccormick_data(self):
+        missing_value_model = make_cut_model(include_binary=False, upper=2.0)
+        missing_value_model.x.set_value(None, skip_validation=True)
+        cut_generation.add_affine_cuts(missing_value_model, make_config(), {})
+        self.assertEqual(len(missing_value_model.MindtPy_utils.cuts.aff_cuts), 0)
+
+        nan_model = make_cut_model(include_binary=False, upper=2.0)
+
+        class NaNMcCormick:
+            def __init__(self, _expr):
+                pass
+
+            def subcc(self):
+                return ComponentMap([(nan_model.x, float('nan')), (nan_model.y, 0.0)])
+
+            def subcv(self):
+                return ComponentMap([(nan_model.x, 1.0), (nan_model.y, 0.0)])
+
+            def concave(self):
+                return 0.5
+
+            def convex(self):
+                return 0.75
+
+            def upper(self):
+                return 3.0
+
+            def lower(self):
+                return -1.0
+
+        with patch.object(cut_generation, 'mc', NaNMcCormick):
+            cut_generation.add_affine_cuts(nan_model, make_config(), {})
+        self.assertEqual(len(nan_model.MindtPy_utils.cuts.aff_cuts), 1)
+
+        nan_convex_model = make_cut_model(include_binary=False, upper=2.0)
+
+        class NaNConvexMcCormick:
+            def __init__(self, _expr):
+                pass
+
+            def subcc(self):
+                return ComponentMap(
+                    [(nan_convex_model.x, 1.0), (nan_convex_model.y, 0.0)]
+                )
+
+            def subcv(self):
+                return ComponentMap(
+                    [(nan_convex_model.x, float('nan')), (nan_convex_model.y, 0.0)]
+                )
+
+            def concave(self):
+                return 0.5
+
+            def convex(self):
+                return 0.75
+
+            def upper(self):
+                return 3.0
+
+            def lower(self):
+                return -1.0
+
+        with patch.object(cut_generation, 'mc', NaNConvexMcCormick):
+            cut_generation.add_affine_cuts(nan_convex_model, make_config(), {})
+        self.assertEqual(len(nan_convex_model.MindtPy_utils.cuts.aff_cuts), 1)
+
+        invalid_model = make_cut_model(include_binary=False, upper=2.0)
+
+        class InvalidMcCormick:
+            def __init__(self, _expr):
+                pass
+
+            def subcc(self):
+                return ComponentMap([(invalid_model.x, 0.0), (invalid_model.y, 0.0)])
+
+            def subcv(self):
+                return ComponentMap([(invalid_model.x, 0.0), (invalid_model.y, 0.0)])
+
+            def concave(self):
+                return float('inf')
+
+            def convex(self):
+                return float('inf')
+
+            def upper(self):
+                return 3.0
+
+            def lower(self):
+                return -1.0
+
+        with patch.object(cut_generation, 'mc', InvalidMcCormick):
+            cut_generation.add_affine_cuts(invalid_model, make_config(), {})
+        self.assertEqual(len(invalid_model.MindtPy_utils.cuts.aff_cuts), 0)
 
 
 class TestUtilities(unittest.TestCase):

@@ -265,6 +265,28 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             def lower(self):
                 return -1.0
 
+        class NaNMcCormick:
+            def __init__(self, _expr):
+                pass
+
+            def subcc(self):
+                return ComponentMap([(model.x, float('nan')), (model.y, 0.0)])
+
+            def subcv(self):
+                return ComponentMap([(model.x, 1.0), (model.y, 0.0)])
+
+            def concave(self):
+                return 0.5
+
+            def convex(self):
+                return 0.75
+
+            def upper(self):
+                return 3.0
+
+            def lower(self):
+                return -1.0
+
         with (
             patch.object(single_tree, 'mc', ErrorMcCormick),
             patch.object(single_tree, 'cplex', self._fake_cplex()),
@@ -287,6 +309,17 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 SimpleNamespace(mip=model, timing={}), make_config(), opt
             )
         self.assertFalse(callback.add.called)
+
+        nan_callback = single_tree.LazyOACallback_cplex()
+        nan_callback.add = MagicMock()
+        with (
+            patch.object(single_tree, 'mc', NaNMcCormick),
+            patch.object(single_tree, 'cplex', self._fake_cplex()),
+        ):
+            nan_callback.add_lazy_affine_cuts(
+                SimpleNamespace(mip=model, timing={}), make_config(), opt
+            )
+        nan_callback.add.assert_called_once()
 
         no_good_callback = single_tree.LazyOACallback_cplex()
         no_good_callback.add = MagicMock()
