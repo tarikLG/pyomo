@@ -2394,7 +2394,7 @@ class _MindtPyAlgorithm:
 
         if config.nlp_solver == 'baron':
             config.equality_relaxation = False
-        if config.nlp_solver == 'gams' and config.nlp_solver.__contains__('solver'):
+        if config.nlp_solver == 'gams' and 'solver' in config.nlp_solver_args:
             if config.nlp_solver_args['solver'] == 'baron':
                 config.equality_relaxation = False
 

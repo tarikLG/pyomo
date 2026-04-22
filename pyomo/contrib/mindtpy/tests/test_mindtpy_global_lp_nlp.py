@@ -97,6 +97,47 @@ class TestMindtPy(unittest.TestCase):
                 )
                 self.check_optimal_solution(model)
 
+    def test_GOA_check_config_single_tree_invalid_solver(self):
+        """Test the global outer approximation check config raises ValueError with single_tree and invalid mip_solver."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Only cplex_persistent and gurobi_persistent are supported for LP/NLP based Branch and Bound method.",
+                ):
+                    opt.solve(
+                        model,
+                        strategy='GOA',
+                        single_tree=True,
+                        mip_solver='glpk',
+                        nlp_solver=required_solvers[0],
+                    )
+
+    def test_GOA_check_config_single_tree_thread_reduction(self):
+        """Test the global outer approximation check config correctly reduces threads when single_tree is used."""
+        with SolverFactory('mindtpy') as opt:
+            for model in model_list:
+                model = model.clone()
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    single_tree=True,
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                    threads=2,
+                )
+                self.assertIn(
+                    results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
+                self.assertEqual(opt.config.threads, 1)
+                self.assertEqual(model.MindtPy_utils.config.threads, 1)
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=2
+                )
+                self.check_optimal_solution(model)
+
     @unittest.skipUnless(
         SolverFactory('gurobi_persistent').available(exception_flag=False)
         and SolverFactory('gurobi_direct').available(),
