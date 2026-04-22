@@ -1031,7 +1031,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertTrue(algorithm.algorithm_should_terminate(check_cycling=False))
         self.assertIs(algorithm.results.solver.termination_condition, tc.feasible)
 
-    def test_fix_dual_bound_and_set_up_mip_solver(self):
+    def test_fix_dual_bound_uses_stored_bound_in_single_tree(self):
         algorithm = make_algorithm()
         algorithm.results = SolverResults()
         algorithm.config = make_config(single_tree=True)
@@ -1043,6 +1043,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         algorithm.stored_bound = {}
         algorithm.fix_dual_bound(last_iter_cuts=True)
 
+    def test_fix_dual_bound_resolves_non_single_tree_bound_fix_problem(self):
         non_single_tree = make_algorithm()
         non_single_tree.results = SolverResults()
         non_single_tree.config = make_config(add_regularization='grad_lag')
@@ -1083,6 +1084,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         update_dual.assert_called_once_with(mip_results)
         load_from.assert_called_once_with(mip_results)
 
+    def test_set_up_mip_solver_enables_single_tree_callbacks_and_warmstart(self):
         callback_algorithm = make_algorithm()
         callback_algorithm.config = make_config(
             single_tree=True, use_tabu_list=True, mip_solver='cplex_persistent'
@@ -1783,7 +1785,7 @@ class TestCutGeneration(unittest.TestCase):
         )
         self.assertGreaterEqual(len(ineq_model.MindtPy_utils.cuts.oa_cuts), 1)
 
-    def test_add_oa_cuts_covers_epigraph_lazy_cut_branches(self):
+    def test_add_oa_cuts_adds_upper_epigraph_lazy_cut(self):
         upper_model = make_cut_model()
         upper_model.MindtPy_utils.objective_constr = Constraint(
             expr=upper_model.x**2 + upper_model.y <= 2.0
@@ -1815,6 +1817,7 @@ class TestCutGeneration(unittest.TestCase):
         self.assertEqual(len(upper_model.MindtPy_utils.cuts.slack_vars), 1)
         upper_cb.cbLazy.assert_called_once()
 
+    def test_add_oa_cuts_adds_lower_epigraph_lazy_cut(self):
         lower_model = make_cut_model()
         lower_model.MindtPy_utils.objective_constr = Constraint(
             expr=lower_model.x**2 + lower_model.y >= 2.0
@@ -2004,7 +2007,7 @@ class TestCutGeneration(unittest.TestCase):
         cut_generation.add_affine_cuts(missing_value_model, make_config(), {})
         self.assertEqual(len(missing_value_model.MindtPy_utils.cuts.aff_cuts), 0)
 
-    def test_add_affine_cuts_keeps_valid_side_when_other_slope_is_nan(self):
+    def test_add_affine_cuts_keeps_concave_side_when_convex_slope_is_nan(self):
         nan_model = make_cut_model(include_binary=False, upper=2.0)
 
         class NaNMcCormick:
@@ -2033,6 +2036,7 @@ class TestCutGeneration(unittest.TestCase):
             cut_generation.add_affine_cuts(nan_model, make_config(), {})
         self.assertEqual(len(nan_model.MindtPy_utils.cuts.aff_cuts), 1)
 
+    def test_add_affine_cuts_keeps_convex_side_when_concave_slope_is_nan(self):
         nan_convex_model = make_cut_model(include_binary=False, upper=2.0)
 
         class NaNConvexMcCormick:
