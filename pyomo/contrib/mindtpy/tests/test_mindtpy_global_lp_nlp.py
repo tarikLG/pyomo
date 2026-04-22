@@ -119,7 +119,7 @@ class TestMindtPy(unittest.TestCase):
         with SolverFactory('mindtpy') as opt:
             for model in model_list:
                 model = model.clone()
-                opt.solve(
+                results = opt.solve(
                     model,
                     strategy='GOA',
                     single_tree=True,
@@ -128,9 +128,11 @@ class TestMindtPy(unittest.TestCase):
                     threads=2,
                 )
                 self.assertIn(
-                    model.MindtPy_utils.results.solver.termination_condition,
+                    results.solver.termination_condition,
                     [TerminationCondition.optimal, TerminationCondition.feasible],
                 )
+                self.assertEqual(opt.config.threads, 1)
+                self.assertEqual(model.MindtPy_utils.config.threads, 1)
                 self.assertAlmostEqual(
                     value(model.objective.expr), model.optimal_value, places=2
                 )

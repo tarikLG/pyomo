@@ -102,11 +102,23 @@ class TestMindtPy(unittest.TestCase):
         with SolverFactory('mindtpy') as opt:
             for model in model_list:
                 model = model.clone()
-                opt.solve(model, strategy='GOA', mip_solver=required_solvers[1], nlp_solver=required_solvers[0], add_no_good_cuts=False, use_tabu_list=False)
-                self.assertIn(model.MindtPy_utils.results.solver.termination_condition, [TerminationCondition.optimal, TerminationCondition.feasible])
+                opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver=required_solvers[1],
+                    nlp_solver=required_solvers[0],
+                    add_no_good_cuts=False,
+                    use_tabu_list=False,
+                )
+                self.assertIn(
+                    model.MindtPy_utils.results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
                 self.assertTrue(model.MindtPy_utils.config.add_no_good_cuts)
                 self.assertFalse(model.MindtPy_utils.config.use_tabu_list)
-                self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
+                self.assertAlmostEqual(
+                    value(model.objective.expr), model.optimal_value, places=2
+                )
                 self.check_optimal_solution(model)
 
     def test_GOA_deactivate_no_good_cuts_when_fixing_bound(self):
@@ -141,7 +153,7 @@ class TestMindtPy(unittest.TestCase):
                 opt.num_no_good_cuts_added = {opt.primal_bound: valid_no_good_cuts_num}
                 opt.config.add_no_good_cuts = True
                 opt.config.use_tabu_list = True
-                opt.integer_list = list(range(len(no_good_cuts)))
+                opt.integer_list = list(no_good_cuts.keys())
 
                 opt.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
 
@@ -187,7 +199,9 @@ class TestMindtPy(unittest.TestCase):
             for i in cuts:
                 cut = cuts[i]
                 self.assertTrue(cut.active)
-                self.assertIn(cut.body.polynomial_degree(), mip_constraint_polynomial_degree)
+                self.assertIn(
+                    cut.body.polynomial_degree(), mip_constraint_polynomial_degree
+                )
                 # Each affine cut should be a one-sided inequality (either <= or >=).
                 self.assertTrue(cut.has_ub() or cut.has_lb())
                 self.assertFalse(cut.has_ub() and cut.has_lb())
@@ -208,30 +222,35 @@ class TestMindtPy(unittest.TestCase):
                     mip_solver=required_solvers[1],
                     nlp_solver=required_solvers[0],
                 )
+                self.assertIn(
+                    results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
 
-            self.assertIn(
-                results.solver.termination_condition,
-                [TerminationCondition.optimal, TerminationCondition.feasible],
+                primal_progress = opt.primal_bound_progress
+                primal_progress_time = opt.primal_bound_progress_time
+                self.assertGreaterEqual(len(primal_progress), 2)
+                self.assertGreaterEqual(len(primal_progress_time), len(primal_progress))
+                self.assertEqual(opt.primal_bound, primal_progress[-1])
+
+                for i in range(1, len(primal_progress_time)):
+                    self.assertGreaterEqual(
+                        primal_progress_time[i], primal_progress_time[i - 1]
+                    )
+
+                if opt.objective_sense == minimize:
+                    for i in range(1, len(primal_progress)):
+                        self.assertLessEqual(primal_progress[i], primal_progress[i - 1])
+                else:
+                    for i in range(1, len(primal_progress)):
+                        self.assertGreaterEqual(
+                            primal_progress[i], primal_progress[i - 1]
+                        )
+
+                self.assertFalse(math.isnan(primal_progress[-1]))
+            self.assertAlmostEqual(
+                value(model.objective.expr), model.optimal_value, places=2
             )
-
-            primal_progress = opt.primal_bound_progress
-            primal_progress_time = opt.primal_bound_progress_time
-            self.assertGreaterEqual(len(primal_progress), 2)
-            self.assertGreaterEqual(len(primal_progress_time), len(primal_progress))
-            self.assertEqual(opt.primal_bound, primal_progress[-1])
-
-            for i in range(1, len(primal_progress_time)):
-                self.assertGreaterEqual(primal_progress_time[i], primal_progress_time[i - 1])
-
-            if opt.objective_sense == minimize:
-                for i in range(1, len(primal_progress)):
-                    self.assertLessEqual(primal_progress[i], primal_progress[i - 1])
-            else:
-                for i in range(1, len(primal_progress)):
-                    self.assertGreaterEqual(primal_progress[i], primal_progress[i - 1])
-
-            self.assertFalse(math.isnan(primal_progress[-1]))
-            self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
             self.check_optimal_solution(model)
 
     def test_GOA_update_primal_bound_no_improvement_behavior(self):
@@ -245,28 +264,31 @@ class TestMindtPy(unittest.TestCase):
                     mip_solver=required_solvers[1],
                     nlp_solver=required_solvers[0],
                 )
+                self.assertIn(
+                    results.solver.termination_condition,
+                    [TerminationCondition.optimal, TerminationCondition.feasible],
+                )
 
-            self.assertIn(
-                results.solver.termination_condition,
-                [TerminationCondition.optimal, TerminationCondition.feasible],
+                old_primal_bound = opt.primal_bound
+                old_no_good_cut_map = dict(opt.num_no_good_cuts_added)
+                old_progress_len = len(opt.primal_bound_progress)
+                old_time_len = len(opt.primal_bound_progress_time)
+
+                # Re-applying the same primal bound must not be marked as an
+                # improvement.
+                opt.update_primal_bound(old_primal_bound)
+
+                self.assertFalse(opt.primal_bound_improved)
+                self.assertEqual(opt.primal_bound, old_primal_bound)
+                self.assertEqual(opt.num_no_good_cuts_added, old_no_good_cut_map)
+                self.assertEqual(len(opt.primal_bound_progress), old_progress_len + 1)
+                # Base update appends one timestamp and GOA appends one
+                # additional timestamp.
+                self.assertEqual(len(opt.primal_bound_progress_time), old_time_len + 2)
+
+            self.assertAlmostEqual(
+                value(model.objective.expr), model.optimal_value, places=2
             )
-
-            old_primal_bound = opt.primal_bound
-            old_no_good_cut_map = dict(opt.num_no_good_cuts_added)
-            old_progress_len = len(opt.primal_bound_progress)
-            old_time_len = len(opt.primal_bound_progress_time)
-
-            # Re-applying the same primal bound must not be marked as an improvement.
-            opt.update_primal_bound(old_primal_bound)
-
-            self.assertFalse(opt.primal_bound_improved)
-            self.assertEqual(opt.primal_bound, old_primal_bound)
-            self.assertEqual(opt.num_no_good_cuts_added, old_no_good_cut_map)
-            self.assertEqual(len(opt.primal_bound_progress), old_progress_len + 1)
-            # Base update appends one timestamp and GOA appends one additional timestamp.
-            self.assertEqual(len(opt.primal_bound_progress_time), old_time_len + 2)
-
-            self.assertAlmostEqual(value(model.objective.expr), model.optimal_value, places=2)
             self.check_optimal_solution(model)
 
     def test_GOA_deactivate_no_good_cuts_keyerror_path(self):
@@ -300,7 +322,7 @@ class TestMindtPy(unittest.TestCase):
 
                 opt.config.add_no_good_cuts = True
                 opt.config.use_tabu_list = True
-                opt.integer_list = list(range(len(no_good_cuts)))
+                opt.integer_list = list(no_good_cuts.keys())
                 integer_list_before = list(opt.integer_list)
 
                 # Force dictionary miss and exercise the KeyError handling branch.
@@ -318,6 +340,7 @@ class TestMindtPy(unittest.TestCase):
                     value(model.objective.expr), model.optimal_value, places=2
                 )
                 self.check_optimal_solution(model)
+
 
 if __name__ == '__main__':
     unittest.main()

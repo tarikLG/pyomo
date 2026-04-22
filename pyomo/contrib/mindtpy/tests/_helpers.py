@@ -60,11 +60,7 @@ class FakePersistentBase:
 
 class FakeSolver:
     def __init__(
-        self,
-        available=True,
-        licensed=True,
-        version=(1, 7, 0),
-        solve_result=None,
+        self, available=True, licensed=True, version=(1, 7, 0), solve_result=None
     ):
         self._available = available
         self._licensed = licensed
@@ -193,11 +189,7 @@ def make_core_model(with_binary=True, nonlinear=True, sense=minimize):
 
 
 def make_cut_model(
-    include_binary=True,
-    equality=False,
-    lower=None,
-    upper=None,
-    sense=minimize,
+    include_binary=True, equality=False, lower=None, upper=None, sense=minimize
 ):
     model = ConcreteModel()
     model.x = Var(bounds=(-2, 3), initialize=1.0)
