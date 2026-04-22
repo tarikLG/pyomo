@@ -76,7 +76,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
     def _make_cplex_lazy_callback(
         self, strategy='OA', add_cuts_at_incumbent=False
     ):
-        callback = object.__new__(single_tree.LazyOACallback_cplex)
+        callback = single_tree.LazyOACallback_cplex()
         callback.main_mip = make_cut_model()
         callback.config = make_config(
             strategy=strategy, add_cuts_at_incumbent=add_cuts_at_incumbent
@@ -112,8 +112,69 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             dual_bound_progress=[0.0],
         )
 
+    def _make_lazy_handler_solver(self):
+        solver = SimpleNamespace(
+            mip=make_cut_model(),
+            fixed_nlp_log_formatter='{0}{1}{2}{3}{4}{5}{6}',
+            primal_bound=10.0,
+            dual_bound=4.0,
+            rel_gap=0.2,
+            primal_bound_improved=False,
+            best_solution_found=None,
+            best_solution_found_time=None,
+            stored_bound={},
+            jacobians=ComponentMap(),
+            objective_sense=minimize,
+            mip_constraint_polynomial_degree={0, 1},
+            mip_iter=1,
+            timing=SimpleNamespace(main_timer_start_time=0.0),
+            update_primal_bound=lambda bound: None,
+            nlp_iter=1,
+            solve_feasibility_subproblem=lambda: (make_cut_model(), SolverResults()),
+            nlp_infeasible_counter=0,
+        )
+        return solver
+
+    def _make_gurobi_cb_opt(self, *, sol_count=1, pool_obj_val=0, cb_get=None):
+        return SimpleNamespace(
+            _solver_model=SimpleNamespace(
+                terminate=MagicMock(), SolCount=sol_count, PoolObjVal=pool_obj_val
+            ),
+            cbGetSolution=MagicMock(),
+            cbGet=cb_get or (lambda key: 2.0),
+            cbLazy=MagicMock(),
+        )
+
+    def _make_gurobi_solver(self, cb_model, **overrides):
+        solver = SimpleNamespace(
+            should_terminate=False,
+            fixed_nlp=make_cut_model(),
+            mip=cb_model,
+            update_dual_bound=MagicMock(),
+            timing={},
+            primal_bound=10.0,
+            dual_bound=5.0,
+            rel_gap=0.5,
+            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
+            best_solution_found=None,
+            dual_bound_improved=True,
+            primal_bound_improved=False,
+            dual_bound_progress=[0.0],
+            jacobians=ComponentMap(),
+            objective_sense=minimize,
+            mip_constraint_polynomial_degree={0, 1},
+            integer_list=[],
+            integer_solution_to_cuts_index={},
+            results=SolverResults(),
+            mip_iter=1,
+            bounds_converged=lambda: False,
+            reached_time_limit=lambda: False,
+        )
+        solver.__dict__.update(overrides)
+        return solver
+
     def test_copy_values_and_add_lazy_no_good_cuts(self):
-        callback = SimpleNamespace(add=MagicMock())
+        callback = single_tree.LazyOACallback_cplex()
         source_model = make_cut_model()
         target_model = make_cut_model()
         opt = SimpleNamespace(
@@ -126,8 +187,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             ),
         )
         callback.get_values = lambda key: {'x': 2.0, 'y': 0.0}[key]
-        single_tree.LazyOACallback_cplex.copy_lazy_var_list_values(
-            callback,
+        callback.copy_lazy_var_list_values(
             opt,
             source_model.MindtPy_utils.variable_list,
             target_model.MindtPy_utils.variable_list,
@@ -137,9 +197,9 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         self.assertAlmostEqual(target_model.x.value, 2.0)
         self.assertEqual(target_model.y.value, 0)
 
+        callback.add = MagicMock()
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.add_lazy_no_good_cuts(
-                callback,
+            callback.add_lazy_no_good_cuts(
                 [2.0, 0.0],
                 SimpleNamespace(mip=target_model, timing={}),
                 make_config(add_no_good_cuts=True),
@@ -151,7 +211,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         self.assertEqual(callback.add.call_args.kwargs['constraint'].variables, ['y'])
 
     def test_add_lazy_oa_cuts_records_mipstart_cuts(self):
-        callback = SimpleNamespace(add=MagicMock())
+        callback = single_tree.LazyOACallback_cplex()
         model = make_cut_model(equality=True, upper=2.0)
         fake_solver = SimpleNamespace(
             jacobians=ComponentMap(
@@ -170,14 +230,13 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 None,
             ),
         )
+        callback.add = MagicMock()
         callback.get_values = lambda key: {'x': value(model.x), 'y': value(model.y)}[
             key
         ]
         callback.get_solution_source = lambda: 119
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.add_lazy_oa_cuts(
-                callback, model, [1.0], fake_solver, config, opt
-            )
+            callback.add_lazy_oa_cuts(model, [1.0], fake_solver, config, opt)
         self.assertEqual(len(fake_solver.mip_start_lazy_oa_cuts), 1)
         callback.add.assert_called_once()
         added_cut = callback.add.call_args.kwargs
@@ -186,8 +245,8 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         self.assertEqual(added_cut['rhs'], stored_cut[2])
         self.assertEqual(added_cut['constraint'].variables, stored_cut[0].variables)
 
-    def test_copy_values_skip_flags_and_inequality_oa_paths(self):
-        callback = SimpleNamespace(add=MagicMock())
+    def test_copy_lazy_var_list_values_skips_stale_and_fixed_variables(self):
+        callback = single_tree.LazyOACallback_cplex()
         source_model = make_cut_model(lower=2.0, upper=3.0)
         target_model = make_cut_model(lower=2.0, upper=3.0)
         source_model.x.stale = True
@@ -202,8 +261,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             ),
         )
         callback.get_values = lambda key: {'x': 2.0, 'y': 0.0}[key]
-        single_tree.LazyOACallback_cplex.copy_lazy_var_list_values(
-            callback,
+        callback.copy_lazy_var_list_values(
             opt,
             source_model.MindtPy_utils.variable_list,
             target_model.MindtPy_utils.variable_list,
@@ -214,6 +272,18 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         self.assertAlmostEqual(target_model.x.value, 1.0)
         self.assertEqual(target_model.y.value, 1)
 
+    def test_add_lazy_oa_cuts_adds_both_inequality_sides_when_linearizing_inactive(self):
+        callback = single_tree.LazyOACallback_cplex()
+        source_model = make_cut_model(lower=2.0, upper=3.0)
+        opt = SimpleNamespace(
+            _pyomo_var_to_solver_var_map=ComponentMap(
+                [(source_model.x, 'x'), (source_model.y, 'y')]
+            ),
+            _get_expr_from_pyomo_expr=lambda expr: (
+                SimpleNamespace(variables=['x', 'y'], coefficients=[1.0, 1.0]),
+                None,
+            ),
+        )
         fake_solver = SimpleNamespace(
             jacobians=ComponentMap(
                 [
@@ -228,10 +298,11 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             mip_start_lazy_oa_cuts=[],
             timing={},
         )
+        callback.add = MagicMock()
+        callback.get_values = lambda key: {'x': 2.0, 'y': 0.0}[key]
         callback.get_solution_source = lambda: 119
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.add_lazy_oa_cuts(
-                callback,
+            callback.add_lazy_oa_cuts(
                 source_model,
                 [1.0],
                 fake_solver,
@@ -247,7 +318,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         )
 
     def test_add_lazy_affine_cuts_skips_missing_values(self):
-        callback = SimpleNamespace(add=MagicMock())
+        callback = single_tree.LazyOACallback_cplex()
         model = make_cut_model(include_binary=False, upper=2.0)
         opt = SimpleNamespace(
             _get_expr_from_pyomo_expr=lambda expr: (
@@ -255,16 +326,17 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 None,
             )
         )
+        callback.add = MagicMock()
         model.x.set_value(None, skip_validation=True)
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                callback,
+            callback.add_lazy_affine_cuts(
                 SimpleNamespace(mip=model, timing={}), make_config(), opt
             )
         self.assertFalse(callback.add.called)
 
-    def test_add_lazy_affine_cuts_skips_mcpp_error_and_invalid_mccormick_data(self):
-        callback = SimpleNamespace(add=MagicMock())
+    def test_add_lazy_affine_cuts_skips_mcpp_error(self):
+        callback = single_tree.LazyOACallback_cplex()
+        callback.add = MagicMock()
         model = make_cut_model(include_binary=False, upper=2.0)
         opt = SimpleNamespace(
             _get_expr_from_pyomo_expr=lambda expr: (
@@ -277,6 +349,27 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         class ErrorMcCormick:
             def __init__(self, _expr):
                 raise single_tree.MCPP_Error('bad mcpp evaluation')
+
+        with (
+            patch.object(single_tree, 'mc', ErrorMcCormick),
+            patch.object(single_tree, 'cplex', self._fake_cplex()),
+        ):
+            callback.add_lazy_affine_cuts(
+                SimpleNamespace(mip=model, timing={}), make_config(), opt
+            )
+        self.assertFalse(callback.add.called)
+
+    def test_add_lazy_affine_cuts_skips_infinite_mccormick_data(self):
+        callback = single_tree.LazyOACallback_cplex()
+        callback.add = MagicMock()
+        model = make_cut_model(include_binary=False, upper=2.0)
+        opt = SimpleNamespace(
+            _get_expr_from_pyomo_expr=lambda expr: (
+                SimpleNamespace(variables=['x', 'y'], coefficients=[1.0, 1.0]),
+                None,
+            )
+        )
+        model.x.set_value(1.0, skip_validation=True)
 
         class InfiniteMcCormick:
             def __init__(self, _expr):
@@ -299,6 +392,27 @@ class TestSingleTreeCallbacks(unittest.TestCase):
 
             def lower(self):
                 return -1.0
+
+        with (
+            patch.object(single_tree, 'mc', InfiniteMcCormick),
+            patch.object(single_tree, 'cplex', self._fake_cplex()),
+        ):
+            callback.add_lazy_affine_cuts(
+                SimpleNamespace(mip=model, timing={}), make_config(), opt
+            )
+        self.assertFalse(callback.add.called)
+
+    def test_add_lazy_affine_cuts_skips_zero_mccormick_data(self):
+        callback = single_tree.LazyOACallback_cplex()
+        callback.add = MagicMock()
+        model = make_cut_model(include_binary=False, upper=2.0)
+        opt = SimpleNamespace(
+            _get_expr_from_pyomo_expr=lambda expr: (
+                SimpleNamespace(variables=['x', 'y'], coefficients=[1.0, 1.0]),
+                None,
+            )
+        )
+        model.x.set_value(1.0, skip_validation=True)
 
         class ZeroMcCormick:
             def __init__(self, _expr):
@@ -323,27 +437,10 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 return -1.0
 
         with (
-            patch.object(single_tree, 'mc', ErrorMcCormick),
-            patch.object(single_tree, 'cplex', self._fake_cplex()),
-        ):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                callback,
-                SimpleNamespace(mip=model, timing={}), make_config(), opt
-            )
-        with (
-            patch.object(single_tree, 'mc', InfiniteMcCormick),
-            patch.object(single_tree, 'cplex', self._fake_cplex()),
-        ):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                callback,
-                SimpleNamespace(mip=model, timing={}), make_config(), opt
-            )
-        with (
             patch.object(single_tree, 'mc', ZeroMcCormick),
             patch.object(single_tree, 'cplex', self._fake_cplex()),
         ):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                callback,
+            callback.add_lazy_affine_cuts(
                 SimpleNamespace(mip=model, timing={}), make_config(), opt
             )
         self.assertFalse(callback.add.called)
@@ -379,13 +476,13 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             def lower(self):
                 return -1.0
 
-        nan_callback = SimpleNamespace(add=MagicMock())
+        nan_callback = single_tree.LazyOACallback_cplex()
+        nan_callback.add = MagicMock()
         with (
             patch.object(single_tree, 'mc', NaNMcCormick),
             patch.object(single_tree, 'cplex', self._fake_cplex()),
         ):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                nan_callback,
+            nan_callback.add_lazy_affine_cuts(
                 SimpleNamespace(mip=model, timing={}), make_config(), opt
             )
         nan_callback.add.assert_called_once()
@@ -423,36 +520,13 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                     opt,
                 )
 
-    def test_handle_lazy_subproblem_optimal_and_infeasible(self):
-        callback = SimpleNamespace(
-            add_lazy_oa_cuts=MagicMock(),
-            add_lazy_no_good_cuts=MagicMock(),
-            add_lazy_affine_cuts=MagicMock(),
-        )
+    def test_handle_lazy_subproblem_optimal_adds_oa_and_no_good_cuts(self):
+        callback = single_tree.LazyOACallback_cplex()
         fixed_nlp = make_cut_model()
         fixed_nlp.MindtPy_utils.objective_list = [fixed_nlp.obj]
         fixed_nlp.tmp_duals = fixed_nlp.MindtPy_utils.constraint_list
         fixed_nlp.dual[fixed_nlp.c] = 1.0
-        solver = SimpleNamespace(
-            mip=make_cut_model(),
-            fixed_nlp_log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            primal_bound=10.0,
-            dual_bound=4.0,
-            rel_gap=0.2,
-            primal_bound_improved=False,
-            best_solution_found=None,
-            best_solution_found_time=None,
-            stored_bound={},
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
-            mip_iter=1,
-            timing=SimpleNamespace(),
-            update_primal_bound=lambda bound: None,
-            nlp_iter=1,
-            solve_feasibility_subproblem=lambda: (make_cut_model(), SolverResults()),
-            nlp_infeasible_counter=0,
-        )
+        solver = self._make_lazy_handler_solver()
         solver.update_primal_bound = lambda bound: setattr(
             solver, 'primal_bound_improved', True
         )
@@ -465,65 +539,50 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         )
         with (
             patch.object(single_tree, 'copy_var_list_values') as copy_values,
+            patch.object(callback, 'add_lazy_oa_cuts') as add_lazy_oa,
+            patch.object(callback, 'add_lazy_no_good_cuts') as add_nogood,
             patch.object(single_tree, 'add_oa_cuts') as add_oa_cuts,
             patch.object(single_tree, 'get_main_elapsed_time', return_value=1.0),
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_subproblem_optimal(
-                callback,
+            callback.handle_lazy_subproblem_optimal(
                 fixed_nlp, solver, config, SimpleNamespace()
             )
         copy_values.assert_called()
-        callback.add_lazy_oa_cuts.assert_called_once()
-        callback.add_lazy_no_good_cuts.assert_called_once()
+        add_lazy_oa.assert_called_once()
+        add_nogood.assert_called_once()
         add_oa_cuts.assert_called_once()
         self.assertIsNotNone(solver.best_solution_found)
 
+    def test_handle_lazy_subproblem_infeasible_goa_adds_affine_and_no_good_cuts(self):
+        callback = single_tree.LazyOACallback_cplex()
+        fixed_nlp = make_cut_model()
+        fixed_nlp.MindtPy_utils.objective_list = [fixed_nlp.obj]
+        solver = self._make_lazy_handler_solver()
         goa_config = make_config(strategy='GOA', add_no_good_cuts=True)
         with (
             patch.object(single_tree, 'copy_var_list_values'),
+            patch.object(callback, 'add_lazy_affine_cuts') as add_affine,
+            patch.object(callback, 'add_lazy_no_good_cuts') as add_nogood,
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_subproblem_infeasible(
-                callback,
+            callback.handle_lazy_subproblem_infeasible(
                 fixed_nlp, solver, goa_config, SimpleNamespace()
             )
-        callback.add_lazy_affine_cuts.assert_called_once()
-        self.assertEqual(callback.add_lazy_no_good_cuts.call_count, 2)
+        add_affine.assert_called_once()
+        add_nogood.assert_called_once()
 
-    def test_handle_lazy_subproblem_remaining_paths(self):
-        callback = SimpleNamespace(
-            add_lazy_oa_cuts=MagicMock(),
-            add_lazy_no_good_cuts=MagicMock(),
-            add_lazy_affine_cuts=MagicMock(),
-        )
+    def test_handle_lazy_subproblem_optimal_goa_adds_affine_cut(self):
+        callback = single_tree.LazyOACallback_cplex()
         fixed_nlp = make_cut_model()
         fixed_nlp.MindtPy_utils.objective_list = [fixed_nlp.obj]
-        solver = SimpleNamespace(
-            mip=make_cut_model(),
-            fixed_nlp_log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            primal_bound=10.0,
-            dual_bound=4.0,
-            rel_gap=0.2,
-            primal_bound_improved=False,
-            best_solution_found=None,
-            best_solution_found_time=None,
-            stored_bound={},
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
-            mip_iter=1,
-            timing=SimpleNamespace(main_timer_start_time=0.0),
-            nlp_iter=1,
-            nlp_infeasible_counter=0,
-            update_primal_bound=lambda bound: setattr(
-                solver, 'primal_bound_improved', True
-            ),
-            solve_feasibility_subproblem=lambda: (make_cut_model(), SolverResults()),
+        solver = self._make_lazy_handler_solver()
+        solver.update_primal_bound = lambda bound: setattr(
+            solver, 'primal_bound_improved', True
         )
         with (
             patch.object(single_tree, 'copy_var_list_values'),
+            patch.object(callback, 'add_lazy_affine_cuts') as add_affine,
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_subproblem_optimal(
-                callback,
+            callback.handle_lazy_subproblem_optimal(
                 fixed_nlp,
                 solver,
                 make_config(
@@ -533,15 +592,21 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 ),
                 SimpleNamespace(),
             )
-        callback.add_lazy_affine_cuts.assert_called_once()
+        add_affine.assert_called_once()
 
+    def test_handle_lazy_subproblem_infeasible_oa_uses_oa_and_no_good_cuts(self):
+        callback = single_tree.LazyOACallback_cplex()
+        fixed_nlp = make_cut_model()
+        fixed_nlp.MindtPy_utils.objective_list = [fixed_nlp.obj]
+        solver = self._make_lazy_handler_solver()
         fixed_nlp.dual[fixed_nlp.c] = None
         with (
             patch.object(single_tree, 'copy_var_list_values'),
+            patch.object(callback, 'add_lazy_oa_cuts') as add_lazy_oa,
+            patch.object(callback, 'add_lazy_no_good_cuts') as add_nogood,
             patch.object(single_tree, 'add_oa_cuts') as add_oa_cuts,
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_subproblem_infeasible(
-                callback,
+            callback.handle_lazy_subproblem_infeasible(
                 fixed_nlp,
                 solver,
                 make_config(
@@ -552,13 +617,14 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 ),
                 SimpleNamespace(),
             )
-        self.assertEqual(callback.add_lazy_oa_cuts.call_count, 1)
+        add_lazy_oa.assert_called_once()
         add_oa_cuts.assert_called_once()
-        self.assertEqual(callback.add_lazy_no_good_cuts.call_count, 1)
+        add_nogood.assert_called_once()
 
-    def test_add_lazy_affine_cuts_and_callback_branches(self):
-        callback = SimpleNamespace(add=MagicMock())
+    def test_add_lazy_affine_cuts_adds_concave_and_convex_cuts(self):
+        callback = single_tree.LazyOACallback_cplex()
         model = make_cut_model(include_binary=False, upper=2.0)
+        callback.add = MagicMock()
         opt = SimpleNamespace(
             _get_expr_from_pyomo_expr=lambda expr: (
                 SimpleNamespace(variables=['x', 'y'], coefficients=[1.0, 1.0]),
@@ -592,43 +658,43 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             patch.object(single_tree, 'mc', FakeMcCormick),
             patch.object(single_tree, 'cplex', self._fake_cplex()),
         ):
-            single_tree.LazyOACallback_cplex.add_lazy_affine_cuts(
-                callback,
+            callback.add_lazy_affine_cuts(
                 SimpleNamespace(mip=model, timing={}), make_config(), opt
             )
         self.assertEqual(callback.add.call_count, 2)
 
-        repeated_callback = SimpleNamespace(
-            main_mip=make_cut_model(),
-            config=make_config(
-                strategy='GOA', add_no_good_cuts=True, add_cuts_at_incumbent=False
-            ),
-            opt=SimpleNamespace(),
-            get_solution_source=lambda: 111,
-            handle_lazy_main_feasible_solution=MagicMock(),
-            add_lazy_no_good_cuts=MagicMock(),
-            mindtpy_solver=SimpleNamespace(
-                mip_start_lazy_oa_cuts=[],
-                should_terminate=False,
-                primal_bound=10.0,
-                dual_bound=0.0,
-                fixed_nlp=make_cut_model(),
-                working_model=make_cut_model(),
-                integer_list=[(1,)],
-                results=SolverResults(),
-                timing={},
-                primal_bound_improved=False,
-                dual_bound_improved=False,
-                best_solution_found=None,
-            ),
+    def test_lazy_callback_repeated_goa_solution_adds_no_good_cut(self):
+        repeated_callback = single_tree.LazyOACallback_cplex()
+        repeated_callback.main_mip = make_cut_model()
+        repeated_callback.config = make_config(
+            strategy='GOA', add_no_good_cuts=True, add_cuts_at_incumbent=False
+        )
+        repeated_callback.opt = SimpleNamespace()
+        repeated_callback.get_solution_source = lambda: 111
+        repeated_callback.handle_lazy_main_feasible_solution = MagicMock()
+        repeated_callback.add_lazy_no_good_cuts = MagicMock()
+        repeated_callback.mindtpy_solver = SimpleNamespace(
+            mip_start_lazy_oa_cuts=[],
+            should_terminate=False,
+            primal_bound=10.0,
+            dual_bound=0.0,
+            fixed_nlp=make_cut_model(),
+            working_model=make_cut_model(),
+            integer_list=[(1,)],
+            results=SolverResults(),
+            timing={},
+            primal_bound_improved=False,
+            dual_bound_improved=False,
+            best_solution_found=None,
         )
         with (
             patch.object(single_tree, 'cplex', self._fake_cplex()),
             patch.object(single_tree, 'get_integer_solution', return_value=(1,)),
         ):
-            single_tree.LazyOACallback_cplex.__call__(repeated_callback)
+            repeated_callback()
         repeated_callback.add_lazy_no_good_cuts.assert_called_once()
 
+    def test_lazy_callback_new_solution_dispatches_optimal_subproblem_handler(self):
         new_callback = single_tree.LazyOACallback_cplex()
         new_callback.main_mip = make_cut_model()
         new_callback.config = make_config(
@@ -661,11 +727,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         new_callback.handle_lazy_subproblem_optimal.assert_called_once()
 
     def test_handle_other_termination_and_main_solution_copy(self):
-        callback = SimpleNamespace(
-            get_best_objective_value=lambda: 2.0,
-            get_objective_value=lambda: 3.0,
-            copy_lazy_var_list_values=MagicMock(),
-        )
+        callback = single_tree.LazyOACallback_cplex()
         fixed_nlp = make_cut_model()
         config = make_config()
         solver = SimpleNamespace(
@@ -678,25 +740,25 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             timing=SimpleNamespace(),
             log_formatter='{0}{1}{2}{3}{4}{5}{6}',
         )
+        callback.get_best_objective_value = lambda: 2.0
+        callback.get_objective_value = lambda: 3.0
+        callback.copy_lazy_var_list_values = MagicMock()
         with (
             patch.object(single_tree, 'copy_var_list_values'),
             patch.object(single_tree, 'get_main_elapsed_time', return_value=1.0),
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_main_feasible_solution(
-                callback,
+            callback.handle_lazy_main_feasible_solution(
                 make_cut_model(), solver, config, SimpleNamespace()
             )
         solver.update_dual_bound.assert_called_once_with(2.0)
 
-        single_tree.LazyOACallback_cplex.handle_lazy_subproblem_other_termination(
-            callback,
+        callback.handle_lazy_subproblem_other_termination(
             fixed_nlp, tc.maxIterations, solver, config
         )
         with self.assertRaisesRegex(
             ValueError, 'unable to handle NLP subproblem termination'
         ):
-            single_tree.LazyOACallback_cplex.handle_lazy_subproblem_other_termination(
-                callback,
+            callback.handle_lazy_subproblem_other_termination(
                 fixed_nlp, tc.error, solver, config
             )
 
@@ -716,98 +778,93 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         callback.add.assert_called_once()
         callback.abort.assert_called_once()
 
-    def test_lazy_callback_covers_incumbent_cut_and_regularization_returns(self):
-        callback = SimpleNamespace(
-            main_mip=make_cut_model(),
-            config=make_config(
-                strategy='OA', add_cuts_at_incumbent=True, add_regularization=None
-            ),
-            opt=SimpleNamespace(),
-            get_solution_source=lambda: 111,
-            copy_lazy_var_list_values=MagicMock(),
-            handle_lazy_main_feasible_solution=MagicMock(),
-            add_lazy_oa_cuts=MagicMock(side_effect=ValueError('bad start')),
-            mindtpy_solver=SimpleNamespace(
-                mip_start_lazy_oa_cuts=[],
-                should_terminate=False,
-                mip=make_cut_model(),
-                fixed_nlp=make_cut_model(),
-                working_model=make_cut_model(),
-                integer_list=[],
-                results=SolverResults(),
-                timing={},
-                primal_bound=10.0,
-                dual_bound=0.0,
-                best_solution_found=None,
-                primal_bound_improved=False,
-                dual_bound_improved=False,
-            ),
+    def test_lazy_callback_skips_invalid_incumbent_cut_generation(self):
+        callback = single_tree.LazyOACallback_cplex()
+        callback.main_mip = make_cut_model()
+        callback.config = make_config(
+            strategy='OA', add_cuts_at_incumbent=True, add_regularization=None
+        )
+        callback.opt = SimpleNamespace()
+        callback.get_solution_source = lambda: 111
+        callback.copy_lazy_var_list_values = MagicMock()
+        callback.handle_lazy_main_feasible_solution = MagicMock()
+        callback.add_lazy_oa_cuts = MagicMock(side_effect=ValueError('bad start'))
+        callback.mindtpy_solver = SimpleNamespace(
+            mip_start_lazy_oa_cuts=[],
+            should_terminate=False,
+            mip=make_cut_model(),
+            fixed_nlp=make_cut_model(),
+            working_model=make_cut_model(),
+            integer_list=[],
+            results=SolverResults(),
+            timing={},
+            primal_bound=10.0,
+            dual_bound=0.0,
+            best_solution_found=None,
+            primal_bound_improved=False,
+            dual_bound_improved=False,
         )
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.__call__(callback)
+            callback()
         callback.add_lazy_oa_cuts.assert_called_once()
 
-        skip_callback = SimpleNamespace(
-            main_mip=make_cut_model(),
-            config=make_config(
-                strategy='OA',
-                add_cuts_at_incumbent=False,
-                add_regularization='grad_lag',
-            ),
-            opt=SimpleNamespace(),
-            get_solution_source=lambda: 111,
-            handle_lazy_main_feasible_solution=MagicMock(),
-            abort=MagicMock(),
-            mindtpy_solver=SimpleNamespace(
-                mip_start_lazy_oa_cuts=[],
-                should_terminate=False,
-                best_solution_found=make_cut_model(),
-                dual_bound_improved=False,
-                primal_bound_improved=False,
-                dual_bound_progress=[0.0],
-                primal_bound=10.0,
-                dual_bound=0.0,
-                results=SolverResults(),
-                fixed_nlp=make_cut_model(),
-                working_model=make_cut_model(),
-                integer_list=[],
-                timing={},
-            ),
+    def test_lazy_callback_skips_regularization_when_bounds_do_not_improve(self):
+        skip_callback = single_tree.LazyOACallback_cplex()
+        skip_callback.main_mip = make_cut_model()
+        skip_callback.config = make_config(
+            strategy='OA', add_cuts_at_incumbent=False, add_regularization='grad_lag'
+        )
+        skip_callback.opt = SimpleNamespace()
+        skip_callback.get_solution_source = lambda: 111
+        skip_callback.handle_lazy_main_feasible_solution = MagicMock()
+        skip_callback.abort = MagicMock()
+        skip_callback.mindtpy_solver = SimpleNamespace(
+            mip_start_lazy_oa_cuts=[],
+            should_terminate=False,
+            best_solution_found=make_cut_model(),
+            dual_bound_improved=False,
+            primal_bound_improved=False,
+            dual_bound_progress=[0.0],
+            primal_bound=10.0,
+            dual_bound=0.0,
+            results=SolverResults(),
+            fixed_nlp=make_cut_model(),
+            working_model=make_cut_model(),
+            integer_list=[],
+            timing={},
         )
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.__call__(skip_callback)
+            skip_callback()
         skip_callback.abort.assert_not_called()
 
-        bound_callback = SimpleNamespace(
-            main_mip=make_cut_model(),
-            config=make_config(
-                strategy='OA',
-                add_cuts_at_incumbent=False,
-                add_regularization='grad_lag',
-            ),
-            opt=SimpleNamespace(),
-            get_solution_source=lambda: 111,
-            handle_lazy_main_feasible_solution=MagicMock(),
-            abort=MagicMock(),
-            mindtpy_solver=SimpleNamespace(
-                mip_start_lazy_oa_cuts=[],
-                should_terminate=False,
-                best_solution_found=make_cut_model(),
-                dual_bound_improved=True,
-                primal_bound_improved=False,
-                dual_bound_progress=[0.0],
-                add_regularization=MagicMock(),
-                primal_bound=1.0,
-                dual_bound=1.0,
-                results=SolverResults(),
-                fixed_nlp=make_cut_model(),
-                working_model=make_cut_model(),
-                integer_list=[],
-                timing={},
-            ),
+    def test_lazy_callback_runs_regularization_and_aborts_on_bound_convergence(self):
+        bound_callback = single_tree.LazyOACallback_cplex()
+        bound_callback.main_mip = make_cut_model()
+        bound_callback.config = make_config(
+            strategy='OA', add_cuts_at_incumbent=False, add_regularization='grad_lag'
+        )
+        bound_callback.opt = SimpleNamespace()
+        bound_callback.get_solution_source = lambda: 111
+        bound_callback.handle_lazy_main_feasible_solution = MagicMock()
+        bound_callback.abort = MagicMock()
+        bound_callback.mindtpy_solver = SimpleNamespace(
+            mip_start_lazy_oa_cuts=[],
+            should_terminate=False,
+            best_solution_found=make_cut_model(),
+            dual_bound_improved=True,
+            primal_bound_improved=False,
+            dual_bound_progress=[0.0],
+            add_regularization=MagicMock(),
+            primal_bound=1.0,
+            dual_bound=1.0,
+            results=SolverResults(),
+            fixed_nlp=make_cut_model(),
+            working_model=make_cut_model(),
+            integer_list=[],
+            timing={},
         )
         with patch.object(single_tree, 'cplex', self._fake_cplex()):
-            single_tree.LazyOACallback_cplex.__call__(bound_callback)
+            bound_callback()
         bound_callback.mindtpy_solver.add_regularization.assert_called_once()
         bound_callback.abort.assert_called_once()
         self.assertIs(
@@ -881,41 +938,15 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         )
 
     def test_lazy_gurobi_callback_replays_previous_cuts(self):
-        fake_grb = SimpleNamespace(
-            Callback=SimpleNamespace(MIPSOL=1, MIPSOL_OBJBND=2),
-            Param=SimpleNamespace(SolutionNumber='SolutionNumber'),
-        )
+        fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
         cb_model.MindtPy_utils.cuts.oa_cuts.add(expr=cb_model.y >= 0)
         cb_model.MindtPy_utils.cuts.oa_cuts.add(expr=cb_model.y <= 1)
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=2, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
-        mindtpy_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing=SimpleNamespace(),
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            best_solution_found=None,
-            dual_bound_improved=True,
-            primal_bound_improved=False,
-            dual_bound_progress=[0.0],
+        cb_opt = self._make_gurobi_cb_opt(sol_count=2)
+        mindtpy_solver = self._make_gurobi_solver(
+            cb_model,
             integer_list=[(1,)],
             integer_solution_to_cuts_index={(1,): [1, 2]},
-            results=SolverResults(),
-            mip_iter=1,
-            bounds_converged=lambda: False,
-            reached_time_limit=lambda: False,
         )
         config = make_config(strategy='OA')
         with (
@@ -929,39 +960,11 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         self.assertEqual(cb_opt.cbLazy.call_count, 2)
 
     def test_lazy_gurobi_callback_new_solution_records_cut_indices(self):
-        fake_grb = SimpleNamespace(
-            Callback=SimpleNamespace(MIPSOL=1, MIPSOL_OBJBND=2),
-            Param=SimpleNamespace(SolutionNumber='SolutionNumber'),
-        )
+        fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=1, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
-        mindtpy_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing={},
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            best_solution_found=None,
-            dual_bound_improved=True,
-            primal_bound_improved=False,
-            dual_bound_progress=[0.0],
-            integer_list=[],
-            integer_solution_to_cuts_index={},
-            results=SolverResults(),
-            mip_iter=1,
-            bounds_converged=lambda: False,
-            reached_time_limit=lambda: False,
+        cb_opt = self._make_gurobi_cb_opt()
+        mindtpy_solver = self._make_gurobi_solver(
+            cb_model,
             solve_subproblem=lambda: (make_cut_model(), make_results()),
         )
         mindtpy_solver.handle_nlp_subproblem_tc = MagicMock(
@@ -983,14 +986,7 @@ class TestSingleTreeCallbacks(unittest.TestCase):
     def test_lazy_gurobi_callback_terminates_immediately_when_requested(self):
         fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=1, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
+        cb_opt = self._make_gurobi_cb_opt()
 
         terminating_solver = SimpleNamespace(should_terminate=True)
         with patch.object(single_tree, 'gurobipy', SimpleNamespace(GRB=fake_grb)):
@@ -1006,37 +1002,10 @@ class TestSingleTreeCallbacks(unittest.TestCase):
     def test_lazy_gurobi_callback_adds_incumbent_oa_cuts_and_terminates_on_bounds(self):
         fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=1, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
-        bounds_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing=SimpleNamespace(),
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            best_solution_found=None,
-            dual_bound_improved=True,
-            primal_bound_improved=False,
-            dual_bound_progress=[0.0],
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
-            integer_list=[],
-            integer_solution_to_cuts_index={},
-            results=SolverResults(),
-            mip_iter=1,
+        cb_opt = self._make_gurobi_cb_opt()
+        bounds_solver = self._make_gurobi_solver(
+            cb_model,
             bounds_converged=lambda: True,
-            reached_time_limit=lambda: False,
             solve_subproblem=lambda: (make_cut_model(), make_results()),
         )
         with (
@@ -1054,40 +1023,15 @@ class TestSingleTreeCallbacks(unittest.TestCase):
         add_oa_cuts.assert_called_once()
         cb_opt._solver_model.terminate.assert_called_once()
 
-    def test_lazy_gurobi_callback_skips_or_adds_regularization_based_on_progress(self):
+    def test_lazy_gurobi_callback_skips_regularization_without_bound_progress(self):
         fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=1, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
-        skip_regularization_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing=SimpleNamespace(),
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
+        cb_opt = self._make_gurobi_cb_opt()
+        skip_regularization_solver = self._make_gurobi_solver(
+            cb_model,
             best_solution_found=make_cut_model(),
             dual_bound_improved=False,
             primal_bound_improved=False,
-            dual_bound_progress=[0.0],
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
-            integer_list=[],
-            integer_solution_to_cuts_index={},
-            results=SolverResults(),
-            mip_iter=1,
-            bounds_converged=lambda: False,
-            reached_time_limit=lambda: False,
             solve_subproblem=lambda: (make_cut_model(), make_results()),
         )
         with (
@@ -1102,30 +1046,17 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 make_config(strategy='OA', add_regularization='grad_lag'),
             )
 
-        add_regularization_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing=SimpleNamespace(),
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
+    def test_lazy_gurobi_callback_adds_regularization_after_bound_improvement(self):
+        fake_grb = self._fake_gurobi()
+        cb_model = make_cut_model()
+        cb_opt = self._make_gurobi_cb_opt()
+        add_regularization_solver = self._make_gurobi_solver(
+            cb_model,
             best_solution_found=make_cut_model(),
             dual_bound_improved=True,
             primal_bound_improved=False,
-            dual_bound_progress=[0.0],
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
             add_regularization=MagicMock(),
-            integer_list=[],
-            integer_solution_to_cuts_index={},
-            results=SolverResults(),
-            mip_iter=1,
             bounds_converged=lambda: True,
-            reached_time_limit=lambda: False,
             solve_subproblem=lambda: (make_cut_model(), make_results()),
         )
         with (
@@ -1144,37 +1075,10 @@ class TestSingleTreeCallbacks(unittest.TestCase):
     def test_lazy_gurobi_callback_adds_no_good_cut_for_repeated_goa_solution(self):
         fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
-        cb_opt = SimpleNamespace(
-            _solver_model=SimpleNamespace(
-                terminate=MagicMock(), SolCount=1, PoolObjVal=0
-            ),
-            cbGetSolution=MagicMock(),
-            cbGet=lambda key: 2.0,
-            cbLazy=MagicMock(),
-        )
-        goa_solver = SimpleNamespace(
-            should_terminate=False,
-            fixed_nlp=make_cut_model(),
-            mip=cb_model,
-            update_dual_bound=MagicMock(),
-            timing=SimpleNamespace(),
-            primal_bound=10.0,
-            dual_bound=5.0,
-            rel_gap=0.5,
-            log_formatter='{0}{1}{2}{3}{4}{5}{6}',
-            best_solution_found=None,
-            dual_bound_improved=True,
-            primal_bound_improved=False,
-            dual_bound_progress=[0.0],
-            jacobians=ComponentMap(),
-            objective_sense=minimize,
-            mip_constraint_polynomial_degree={0, 1},
+        cb_opt = self._make_gurobi_cb_opt()
+        goa_solver = self._make_gurobi_solver(
+            cb_model,
             integer_list=[(1,)],
-            integer_solution_to_cuts_index={},
-            results=SolverResults(),
-            mip_iter=1,
-            bounds_converged=lambda: False,
-            reached_time_limit=lambda: False,
         )
         with (
             patch.object(single_tree, 'gurobipy', SimpleNamespace(GRB=fake_grb)),

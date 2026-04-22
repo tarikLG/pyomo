@@ -599,7 +599,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             ):
                 error_algorithm.init_rNLP(add_oa_cuts=False)
 
-    def test_init_max_binaries_covers_persistent_and_termination_branches(self):
+    def test_init_max_binaries_copies_solution_from_persistent_solver(self):
         optimal_algorithm = make_algorithm()
         optimal_algorithm.config = make_config()
         optimal_algorithm.working_model = make_cut_model()
@@ -633,6 +633,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertFalse(hasattr(optimal_algorithm.mip_opt.instance, 'dual'))
         copy_values.assert_called_once()
 
+    def test_init_max_binaries_raises_for_infeasible_and_unhandled_termination(self):
         termination_cases = [
             (tc.infeasible, 'MIP main problem is infeasible'),
             (tc.error, 'unable to handle MILP main termination condition'),
@@ -657,6 +658,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, message):
                         algorithm.init_max_binaries()
 
+    def test_init_max_binaries_handles_time_and_iteration_limits(self):
         time_limit_algorithm = make_algorithm()
         time_limit_algorithm.config = make_config()
         time_limit_algorithm.working_model = make_cut_model()
@@ -2094,6 +2096,51 @@ class TestCutGeneration(unittest.TestCase):
 
 
 class TestUtilities(unittest.TestCase):
+    def _build_lag_objective_models(self):
+        model = make_cut_model()
+        setpoint = make_cut_model()
+        setpoint.dual[setpoint.c] = 1.0
+        model.MindtPy_utils.continuous_variable_list = [model.x]
+        setpoint.MindtPy_utils.continuous_variable_list = [setpoint.x]
+        return model, setpoint
+
+    def _fake_pyomo_nlp(self):
+        class FakeMatrix:
+            def __init__(self, data):
+                self._data = util.numpy.array(data, dtype=float)
+
+            def toarray(self):
+                return self._data
+
+        class FakePyomoNLP:
+            def __init__(self, nlp_model):
+                self.vars = list(nlp_model.MindtPy_utils.variable_list)
+                self.cons = list(nlp_model.MindtPy_utils.constraint_list)
+
+            def get_pyomo_constraints(self):
+                return self.cons
+
+            def set_duals(self, lam):
+                self.lam = lam
+
+            def evaluate_grad_objective(self):
+                return util.numpy.array([1.0, 2.0])
+
+            def evaluate_jacobian(self):
+                return FakeMatrix([[3.0, 4.0]])
+
+            def get_pyomo_variables(self):
+                return self.vars
+
+            def get_primal_indices(self, variables):
+                target = variables[0]
+                return [[i for i, var in enumerate(self.vars) if var is target][0]]
+
+            def evaluate_hessian_lag(self):
+                return FakeMatrix([[2.0, 0.0], [0.0, 2.0]])
+
+        return SimpleNamespace(PyomoNLP=FakePyomoNLP)
+
     def test_solver_option_helpers_and_integer_solution(self):
         config = make_config()
         config.time_limit = 30
@@ -2219,46 +2266,8 @@ class TestUtilities(unittest.TestCase):
         mip_model.y.set_value(1)
         self.assertTrue(util.fp_converged(working_model, mip_model, 0.0))
 
-    def test_lagrangian_regularization_and_misc_helpers(self):
-        model = make_cut_model()
-        setpoint = make_cut_model()
-        setpoint.dual[setpoint.c] = 1.0
-        model.MindtPy_utils.continuous_variable_list = [model.x]
-        setpoint.MindtPy_utils.continuous_variable_list = [setpoint.x]
-
-        class FakeMatrix:
-            def __init__(self, data):
-                self._data = util.numpy.array(data, dtype=float)
-
-            def toarray(self):
-                return self._data
-
-        class FakePyomoNLP:
-            def __init__(self, nlp_model):
-                self.vars = list(nlp_model.MindtPy_utils.variable_list)
-                self.cons = list(nlp_model.MindtPy_utils.constraint_list)
-
-            def get_pyomo_constraints(self):
-                return self.cons
-
-            def set_duals(self, lam):
-                self.lam = lam
-
-            def evaluate_grad_objective(self):
-                return util.numpy.array([1.0, 2.0])
-
-            def evaluate_jacobian(self):
-                return FakeMatrix([[3.0, 4.0]])
-
-            def get_pyomo_variables(self):
-                return self.vars
-
-            def get_primal_indices(self, variables):
-                target = variables[0]
-                return [[i for i, var in enumerate(self.vars) if var is target][0]]
-
-            def evaluate_hessian_lag(self):
-                return FakeMatrix([[2.0, 0.0], [0.0, 2.0]])
+    def test_generate_lag_objective_function_supports_gradient_and_hessian_modes(self):
+        model, setpoint = self._build_lag_objective_models()
 
         config = make_config(add_regularization='grad_lag')
         with (
@@ -2267,7 +2276,7 @@ class TestUtilities(unittest.TestCase):
                 'TransformationFactory',
                 return_value=SimpleNamespace(apply_to=lambda m: None),
             ),
-            patch.object(util, 'pyomo_nlp', SimpleNamespace(PyomoNLP=FakePyomoNLP)),
+            patch.object(util, 'pyomo_nlp', self._fake_pyomo_nlp()),
         ):
             grad_obj = util.generate_lag_objective_function(
                 model, setpoint, config, {}, discrete_only=False
@@ -2283,13 +2292,16 @@ class TestUtilities(unittest.TestCase):
                     'TransformationFactory',
                     return_value=SimpleNamespace(apply_to=lambda m: None),
                 ),
-                patch.object(util, 'pyomo_nlp', SimpleNamespace(PyomoNLP=FakePyomoNLP)),
+                patch.object(util, 'pyomo_nlp', self._fake_pyomo_nlp()),
             ):
                 obj = util.generate_lag_objective_function(
                     model, setpoint, config, {}, discrete_only=False
                 )
                 obj.construct()
             self.assertIsNotNone(obj)
+
+    def test_generate_lag_objective_function_supports_sqp_and_norm_helpers(self):
+        model, setpoint = self._build_lag_objective_models()
 
         config = make_config(add_regularization='sqp_lag')
         config.sqp_lag_scaling_coef = 'fixed'
@@ -2299,7 +2311,7 @@ class TestUtilities(unittest.TestCase):
                 'TransformationFactory',
                 return_value=SimpleNamespace(apply_to=lambda m: None),
             ),
-            patch.object(util, 'pyomo_nlp', SimpleNamespace(PyomoNLP=FakePyomoNLP)),
+            patch.object(util, 'pyomo_nlp', self._fake_pyomo_nlp()),
         ):
             sqp_obj = util.generate_lag_objective_function(
                 model, setpoint, config, {}, discrete_only=True
@@ -2311,6 +2323,9 @@ class TestUtilities(unittest.TestCase):
         util.generate_norm_constraint(model, setpoint, config)
         config.fp_main_norm = 'L_infinity'
         util.generate_norm_constraint(model, setpoint, config)
+
+    def test_misc_utility_helpers_cover_invalid_value_and_gurobi_callback_wrapper(self):
+        model = make_cut_model()
         with self.assertRaisesRegex(ValueError, 'set_var_valid_value failed'):
             util.set_var_valid_value(model.y, 0.4, 1e-9, 1e-9, False)
 
