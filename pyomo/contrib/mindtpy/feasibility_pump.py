@@ -9,6 +9,8 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 
+"""Feasibility Pump initialization strategy implementation for MindtPy."""
+
 import logging
 from pyomo.contrib.mindtpy.config_options import _get_MindtPy_FP_config
 from pyomo.contrib.mindtpy.algorithm_base_class import _MindtPyAlgorithm
@@ -36,6 +38,7 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
     CONFIG = _get_MindtPy_FP_config()
 
     def check_config(self):
+        """Validate and enforce Feasibility Pump specific configuration."""
         # feasibility pump alone will lead to iteration_limit = 0, important!
         self.config.iteration_limit = 0
         self.config.move_objective = True
@@ -60,6 +63,21 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
         cb_opt=None,
         nlp=None,
     ):
+        """Add cuts for the current feasibility pump iterate.
+
+        Parameters
+        ----------
+        dual_values : list
+            Dual multipliers from the NLP subproblem.
+        linearize_active : bool, optional
+            Whether to linearize active nonlinear constraints.
+        linearize_violated : bool, optional
+            Whether to linearize violated nonlinear constraints.
+        cb_opt : SolverFactory, optional
+            Callback-capable persistent MIP optimizer.
+        nlp : Block, optional
+            NLP model used by strategies requiring model-specific cut data.
+        """
         add_oa_cuts(
             self.mip,
             dual_values,
@@ -74,5 +92,6 @@ class MindtPy_FP_Solver(_MindtPyAlgorithm):
             linearize_violated,
         )
 
-    def MindtPy_iteration_loop(self):
-        pass
+    def feasibility_pump_iteration_loop(self):
+        """Run the Feasibility Pump-specific outer iteration loop."""
+        self.fp_loop()

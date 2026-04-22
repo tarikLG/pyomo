@@ -14,9 +14,9 @@ import pyomo.common.unittest as unittest
 from pyomo.environ import SolverFactory, value, maximize
 from pyomo.opt import TerminationCondition
 from pyomo.common.dependencies import numpy_available, scipy_available
-from pyomo.contrib.mindtpy.tests.MINLP_simple import SimpleMINLP as SimpleMINLP
+from pyomo.contrib.mindtpy.tests.minlp_simple import MinlpSimple
 
-model_list = [SimpleMINLP(grey_box=True)]
+model_list = [MinlpSimple(grey_box=True)]
 
 if SolverFactory('appsi_highs').available(exception_flag=False) and SolverFactory(
     'appsi_highs'
@@ -40,9 +40,18 @@ else:
     not differentiate_available, 'Symbolic differentiation is not available'
 )
 class TestMindtPy(unittest.TestCase):
-    """Tests for the MindtPy solver plugin."""
+    """Tests for the MindtPy solver."""
 
     def check_optimal_solution(self, model, places=1):
+        """Assert that variable values match the model's known optimum.
+
+        Parameters
+        ----------
+        model : Block
+            Model containing ``optimal_solution`` values for comparison.
+        places : int, optional
+            Decimal places used by ``assertAlmostEqual``.
+        """
         for var in model.optimal_solution:
             self.assertAlmostEqual(
                 var.value, model.optimal_solution[var], places=places

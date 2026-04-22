@@ -7,6 +7,7 @@
 # software.  This software is distributed under the 3-clause BSD License.
 # ____________________________________________________________________________________
 #
+"""Tabu-list callback support for persistent-solver MindtPy runs."""
 
 from pyomo.common.dependencies import attempt_import, UnavailableClass
 
@@ -19,10 +20,12 @@ class IncumbentCallback_cplex(
     """Inherent class in Cplex to call Incumbent callback."""
 
     def __call__(self):
-        """
+        """Process each candidate incumbent found by CPLEX.
+
         This is an inherent function in LazyConstraintCallback in CPLEX.
         This callback will be used after each new potential incumbent is found.
-        https://www.ibm.com/support/knowledgecenter/SSSA5P_12.10.0/ilog.odms.cplex.help/refpythoncplex/html/cplex.callbacks.IncumbentCallback-class.html
+        See IBM ILOG CPLEX Optimization Studio documentation for
+        ``IncumbentCallback`` callback behavior.
         IncumbentCallback will be activated after Lazyconstraint callback, when the potential incumbent solution is satisfies the lazyconstraints.
         TODO: need to handle GOA same integer combination check in lazyconstraint callback in single_tree.py
         """
