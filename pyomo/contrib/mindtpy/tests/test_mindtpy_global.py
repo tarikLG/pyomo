@@ -12,13 +12,14 @@
 
 import math
 import pyomo.common.unittest as unittest
+from pyomo.contrib.mcpp import pyomo_mcpp
 from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.nonconvex1 import Nonconvex1
 from pyomo.contrib.mindtpy.tests.nonconvex2 import Nonconvex2
 from pyomo.contrib.mindtpy.tests.nonconvex3 import Nonconvex3
 from pyomo.contrib.mindtpy.tests.nonconvex4 import Nonconvex4
+from pyomo.environ import ConstraintList
 from pyomo.environ import SolverFactory, value
-from pyomo.environ import *
 from pyomo.opt import TerminationCondition
 
 required_solvers = ('baron', 'cplex_persistent')
@@ -29,7 +30,7 @@ elif not SolverFactory('baron').license_is_valid():
 else:
     subsolvers_available = True
 
-mcpp_available = pyomo.contrib.mcpp.pyomo_mcpp.mcpp_available()
+mcpp_available = pyomo_mcpp.mcpp_available()
 goa_test_requirements_available = subsolvers_available and mcpp_available
 
 model_list = [

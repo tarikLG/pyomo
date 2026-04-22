@@ -100,6 +100,9 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 opt,
             )
         callback.add.assert_called_once()
+        self.assertEqual(callback.add.call_args.kwargs['sense'], 'G')
+        self.assertEqual(callback.add.call_args.kwargs['rhs'], 1.0)
+        self.assertEqual(callback.add.call_args.kwargs['constraint'].variables, ['y'])
 
     def test_add_lazy_oa_cuts_records_mipstart_cuts(self):
         callback = single_tree.LazyOACallback_cplex()
@@ -130,6 +133,11 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             callback.add_lazy_oa_cuts(model, [1.0], fake_solver, config, opt)
         self.assertEqual(len(fake_solver.mip_start_lazy_oa_cuts), 1)
         callback.add.assert_called_once()
+        added_cut = callback.add.call_args.kwargs
+        stored_cut = fake_solver.mip_start_lazy_oa_cuts[0]
+        self.assertEqual(added_cut['sense'], stored_cut[1])
+        self.assertEqual(added_cut['rhs'], stored_cut[2])
+        self.assertEqual(added_cut['constraint'].variables, stored_cut[0].variables)
 
     def test_copy_values_skip_flags_and_inequality_oa_paths(self):
         callback = single_tree.LazyOACallback_cplex()
@@ -184,6 +192,11 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             )
         self.assertEqual(callback.add.call_count, 2)
         self.assertEqual(len(fake_solver.mip_start_lazy_oa_cuts), 2)
+        senses = [call.kwargs['sense'] for call in callback.add.call_args_list]
+        self.assertEqual(senses, ['L', 'G'])
+        self.assertEqual(
+            [cut[1] for cut in fake_solver.mip_start_lazy_oa_cuts], ['L', 'G']
+        )
 
     def test_add_lazy_affine_and_no_good_cut_edge_cases(self):
         callback = single_tree.LazyOACallback_cplex()

@@ -42,9 +42,8 @@ env:
 jobs:
   lint:
     name: lint/style-and-typos
-    if: |
-      ${{ ! ( contains(github.event.pull_request.title, '[WIP]') ||
-            github.event.pull_request.draft ) }}
+    if: ${{ ! ( contains(github.event.pull_request.title, '[WIP]') ||
+          github.event.pull_request.draft ) }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Pyomo source
@@ -971,6 +970,8 @@ jobs:
     if: success() || failure()
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    env:
+      PYOMO_CODECOV_TOKEN: ${{ secrets.PYOMO_CODECOV_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -979,10 +980,13 @@ jobs:
         include:
         - os: ubuntu-latest
           TARGET: linux
+          setup_options: ''
         - os: macos-latest
           TARGET: osx
+          setup_options: ''
         - os: windows-latest
           TARGET: win
+          setup_options: ''
 
     steps:
     - name: Checkout Pyomo source
@@ -1087,11 +1091,11 @@ jobs:
           coverage-other.xml
 
     - name: Upload codecov reports
-      if: hashFiles('coverage.xml') != '' && secrets.PYOMO_CODECOV_TOKEN != ''
+      if: hashFiles('coverage.xml') != '' && env.PYOMO_CODECOV_TOKEN != ''
       uses: codecov/codecov-action@v6
       with:
         files: coverage.xml
-        token: ${{ secrets.PYOMO_CODECOV_TOKEN }}
+        token: ${{ env.PYOMO_CODECOV_TOKEN }}
         name: ${{ matrix.TARGET }}
         flags: ${{ matrix.TARGET }}
         fail_ci_if_error: true
@@ -1099,11 +1103,11 @@ jobs:
     - name: Upload other coverage reports
       if: |
         hashFiles('coverage-other.xml') != '' &&
-        secrets.PYOMO_CODECOV_TOKEN != ''
+        env.PYOMO_CODECOV_TOKEN != ''
       uses: codecov/codecov-action@v6
       with:
         files: coverage-other.xml
-        token: ${{ secrets.PYOMO_CODECOV_TOKEN }}
+        token: ${{ env.PYOMO_CODECOV_TOKEN }}
         name: ${{ matrix.TARGET }}/other
         flags: ${{ matrix.TARGET }}_other
         fail_ci_if_error: true

@@ -55,9 +55,27 @@ class TestMindtPyTopLevel(unittest.TestCase):
         solver = MindtPy.MindtPySolver()
         model = make_core_model()
         dispatched = FakeSolver()
-        with patch.object(MindtPy, 'SolverFactory', return_value=dispatched):
-            solver.solve(model, strategy='OA', mip_solver='glpk', nlp_solver='ipopt')
+        created_solver_names = []
+
+        def fake_solver_factory(name):
+            created_solver_names.append(name)
+            return dispatched
+
+        with patch.object(MindtPy, 'SolverFactory', side_effect=fake_solver_factory):
+            solver.solve(
+                model,
+                strategy='OA',
+                mip_solver='glpk',
+                nlp_solver='ipopt',
+                options={'iteration_limit': 3},
+            )
+
+        self.assertEqual(created_solver_names, ['mindtpy.oa'])
         self.assertEqual(len(dispatched.solve_calls), 1)
+        _, forwarded_kwargs = dispatched.solve_calls[0]
+        self.assertNotIn('options', forwarded_kwargs)
+        self.assertEqual(forwarded_kwargs['mip_solver'], 'glpk')
+        self.assertEqual(forwarded_kwargs['nlp_solver'], 'ipopt')
         self.assertTrue(solver.available())
         self.assertTrue(solver.license_is_valid())
         self.assertEqual(solver.version(), MindtPy.__version__)
@@ -1116,12 +1134,15 @@ class TestOaAndGoaSolvers(unittest.TestCase):
             solver.add_cuts()
         add_affine.assert_called_once_with(solver.mip, solver.config, solver.timing)
 
+        no_good_cuts = solver.mip.MindtPy_utils.cuts.no_good_cuts
+        no_good_cuts.add(expr=solver.mip.y >= 0)
         solver.num_no_good_cuts_added = {}
         solver.primal_bound = 1.0
         solver.config = make_goa_config()
-        solver.deactivate_no_good_cuts_when_fixing_bound(
-            solver.mip.MindtPy_utils.cuts.no_good_cuts
-        )
+        solver.integer_list = [(1,)]
+        solver.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
+        self.assertTrue(no_good_cuts[1].active)
+        self.assertEqual(solver.integer_list, [(1,)])
 
     def test_outer_approximation_configuration_and_objective_reformulation(self):
         solver = outer_approximation.MindtPy_OA_Solver()
