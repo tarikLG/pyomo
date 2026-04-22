@@ -67,6 +67,12 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             ),
         )
 
+    def _fake_gurobi(self):
+        return SimpleNamespace(
+            Callback=SimpleNamespace(MIPSOL=1, MIPSOL_OBJBND=2, MIPSOL_OBJ=3),
+            Param=SimpleNamespace(SolutionNumber='SolutionNumber'),
+        )
+
     def test_copy_values_and_add_lazy_no_good_cuts(self):
         callback = single_tree.LazyOACallback_cplex()
         source_model = make_cut_model()
@@ -957,11 +963,8 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             )
         self.assertEqual(mindtpy_solver.integer_solution_to_cuts_index[(1,)], [1, 1])
 
-    def test_lazy_gurobi_callback_remaining_paths(self):
-        fake_grb = SimpleNamespace(
-            Callback=SimpleNamespace(MIPSOL=1, MIPSOL_OBJBND=2, MIPSOL_OBJ=3),
-            Param=SimpleNamespace(SolutionNumber='SolutionNumber'),
-        )
+    def test_lazy_gurobi_callback_terminates_immediately_when_requested(self):
+        fake_grb = self._fake_gurobi()
         cb_model = make_cut_model()
         cb_opt = SimpleNamespace(
             _solver_model=SimpleNamespace(
@@ -983,6 +986,17 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             )
         cb_opt._solver_model.terminate.assert_called_once()
 
+    def test_lazy_gurobi_callback_adds_incumbent_oa_cuts_and_terminates_on_bounds(self):
+        fake_grb = self._fake_gurobi()
+        cb_model = make_cut_model()
+        cb_opt = SimpleNamespace(
+            _solver_model=SimpleNamespace(
+                terminate=MagicMock(), SolCount=1, PoolObjVal=0
+            ),
+            cbGetSolution=MagicMock(),
+            cbGet=lambda key: 2.0,
+            cbLazy=MagicMock(),
+        )
         bounds_solver = SimpleNamespace(
             should_terminate=False,
             fixed_nlp=make_cut_model(),
@@ -1021,8 +1035,19 @@ class TestSingleTreeCallbacks(unittest.TestCase):
                 make_config(strategy='OA', add_cuts_at_incumbent=True),
             )
         add_oa_cuts.assert_called_once()
-        self.assertGreaterEqual(cb_opt._solver_model.terminate.call_count, 2)
+        cb_opt._solver_model.terminate.assert_called_once()
 
+    def test_lazy_gurobi_callback_skips_or_adds_regularization_based_on_progress(self):
+        fake_grb = self._fake_gurobi()
+        cb_model = make_cut_model()
+        cb_opt = SimpleNamespace(
+            _solver_model=SimpleNamespace(
+                terminate=MagicMock(), SolCount=1, PoolObjVal=0
+            ),
+            cbGetSolution=MagicMock(),
+            cbGet=lambda key: 2.0,
+            cbLazy=MagicMock(),
+        )
         skip_regularization_solver = SimpleNamespace(
             should_terminate=False,
             fixed_nlp=make_cut_model(),
@@ -1099,6 +1124,17 @@ class TestSingleTreeCallbacks(unittest.TestCase):
             )
         add_regularization_solver.add_regularization.assert_called_once()
 
+    def test_lazy_gurobi_callback_adds_no_good_cut_for_repeated_goa_solution(self):
+        fake_grb = self._fake_gurobi()
+        cb_model = make_cut_model()
+        cb_opt = SimpleNamespace(
+            _solver_model=SimpleNamespace(
+                terminate=MagicMock(), SolCount=1, PoolObjVal=0
+            ),
+            cbGetSolution=MagicMock(),
+            cbGet=lambda key: 2.0,
+            cbLazy=MagicMock(),
+        )
         goa_solver = SimpleNamespace(
             should_terminate=False,
             fixed_nlp=make_cut_model(),

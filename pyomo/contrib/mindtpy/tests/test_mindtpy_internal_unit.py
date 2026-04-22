@@ -689,7 +689,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             max_iter_algorithm.results.solver.termination_condition, tc.unknown
         )
 
-    def test_subproblem_and_main_problem_handlers(self):
+    def test_handle_subproblem_optimal_updates_best_solution_and_cuts(self):
         algorithm = make_algorithm()
         algorithm.config = make_config(
             calculate_dual_at_solution=True, add_no_good_cuts=True, nlp_solver='cyipopt'
@@ -698,8 +698,6 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         algorithm.mip = make_cut_model()
         algorithm.fixed_nlp = make_cut_model()
         algorithm.fixed_nlp_log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
-        algorithm.infeasible_fixed_nlp_log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
-        algorithm.termination_condition_log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
         algorithm.primal_bound = 10.0
         algorithm.dual_bound = 4.0
         algorithm.primal_bound_progress = [10.0]
@@ -731,7 +729,24 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         add_nogood.assert_called_once()
         self.assertIsNotNone(algorithm.best_solution_found)
 
-        algorithm.should_terminate = False
+    def test_handle_subproblem_infeasible_adds_cuts_and_no_good_cut(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(
+            calculate_dual_at_solution=True, add_no_good_cuts=True
+        )
+        algorithm.mip = make_cut_model()
+        algorithm.infeasible_fixed_nlp_log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 4.0
+        algorithm.primal_bound_progress = [10.0]
+        algorithm.dual_bound_progress = [4.0]
+        algorithm.rel_gap = 0.6
+        algorithm.mip_iter = 1
+        algorithm.nlp_iter = 1
+        algorithm.objective_sense = minimize
+        algorithm.timing = {}
+        fixed_nlp = make_cut_model()
+        fixed_nlp.MindtPy_utils.objective_list = [fixed_nlp.obj]
         algorithm.solve_feasibility_subproblem = lambda: (
             make_cut_model(),
             make_results(),
@@ -747,6 +762,12 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             algorithm.handle_subproblem_infeasible(fixed_nlp)
         algorithm.add_cuts.assert_called_once()
         add_nogood.assert_called_once()
+
+    def test_handle_subproblem_other_termination_and_dispatch(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(add_no_good_cuts=True)
+        algorithm.results = SolverResults()
+        fixed_nlp = make_cut_model()
 
         with patch.object(algorithm_base_class, 'add_no_good_cuts') as add_nogood:
             algorithm.handle_subproblem_other_termination(fixed_nlp, tc.maxIterations)
@@ -769,10 +790,20 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         optimal_handler.assert_called_once()
         infeasible_handler.assert_called_once()
 
-        main_mip = make_cut_model()
-        main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
+    def test_handle_main_problem_handlers_cover_optimal_timelimit_and_unbounded(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
         algorithm.fixed_nlp = make_cut_model()
         algorithm.mip_opt = FakePersistentSolver(solve_result=make_results())
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 4.0
+        algorithm.primal_bound_progress = [10.0]
+        algorithm.dual_bound_progress = [4.0]
+        algorithm.rel_gap = 0.6
+        algorithm.mip_iter = 1
+        algorithm.timing = {}
+        main_mip = make_cut_model()
+        main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
         with (
             patch.object(algorithm_base_class, 'copy_var_list_values'),
             patch.object(
@@ -784,13 +815,18 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             algorithm.handle_main_max_timelimit(main_mip, make_results(lower_bound=1.0))
             algorithm.handle_main_unbounded(main_mip)
 
+    def test_handle_main_infeasible_and_regularization_dispatch(self):
+        algorithm = make_algorithm()
         algorithm.results = SolverResults()
         algorithm.results.solver.termination_condition = None
         algorithm.primal_bound = float('inf')
         algorithm.objective_sense = minimize
+        algorithm.mip_iter = 0
         algorithm.handle_main_infeasible()
         self.assertIs(algorithm.results.solver.termination_condition, tc.infeasible)
 
+        main_mip = make_cut_model()
+        main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
         with patch.object(algorithm, 'handle_main_optimal') as handle_main_optimal:
             algorithm.handle_regularization_main_tc(main_mip, None)
             algorithm.handle_regularization_main_tc(main_mip, make_results())
@@ -798,8 +834,13 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             algorithm.handle_regularization_main_tc(main_mip, unknown)
         self.assertEqual(handle_main_optimal.call_count, 2)
 
+    def test_handle_main_mip_termination_dispatches_status_handlers(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
         algorithm.results = SolverResults()
         algorithm.fixed_nlp = make_cut_model()
+        main_mip = make_cut_model()
+        main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
         with (
             patch.object(algorithm, 'handle_main_optimal') as handle_main_optimal,
             patch.object(algorithm, 'handle_main_infeasible') as handle_main_infeasible,
@@ -1050,61 +1091,61 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         callback_algorithm.set_up_lazy_OA_callback.assert_called_once()
         callback_algorithm.set_up_tabulist_callback.assert_called_once()
 
-    def test_solve_main_fp_main_and_unbounded_handlers(self):
-        exception_algorithm = make_algorithm()
-        exception_algorithm.results = SolverResults()
-        exception_algorithm.config = make_config(
+    def test_solve_main_returns_timeout_after_solver_exception(self):
+        algorithm = make_algorithm()
+        algorithm.results = SolverResults()
+        algorithm.config = make_config(
             single_tree=True, strategy='GOA', add_no_good_cuts=True
         )
-        exception_algorithm.mip = make_cut_model()
-        exception_algorithm.setup_main = MagicMock()
-        exception_algorithm.set_up_mip_solver = MagicMock(return_value={})
-        exception_algorithm.mip_opt = FakeSolver()
-        exception_algorithm.mip_opt.solve = MagicMock(
-            side_effect=ValueError('bad solve')
-        )
+        algorithm.mip = make_cut_model()
+        algorithm.setup_main = MagicMock()
+        algorithm.set_up_mip_solver = MagicMock(return_value={})
+        algorithm.mip_opt = FakeSolver()
+        algorithm.mip_opt.solve = MagicMock(side_effect=ValueError('bad solve'))
         with (
             patch.object(algorithm_base_class, 'update_solver_timelimit'),
             patch.object(
                 algorithm_base_class,
                 'get_main_elapsed_time',
-                return_value=exception_algorithm.config.time_limit,
+                return_value=algorithm.config.time_limit,
             ),
         ):
-            main_mip, main_results = exception_algorithm.solve_main()
+            main_mip, main_results = algorithm.solve_main()
         self.assertIsNone(main_mip)
         self.assertIsNone(main_results)
         self.assertIs(
-            exception_algorithm.results.solver.termination_condition, tc.maxTimeLimit
+            algorithm.results.solver.termination_condition, tc.maxTimeLimit
         )
 
-        pool_algorithm = make_algorithm()
-        pool_algorithm.config = make_config(
+    def test_solve_main_solution_pool_preserves_solver_artifacts(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(
             single_tree=True, add_no_good_cuts=False, solution_pool=True
         )
-        pool_algorithm.mip = make_cut_model()
-        pool_algorithm.setup_main = MagicMock()
-        pool_algorithm.set_up_mip_solver = MagicMock(return_value={})
+        algorithm.mip = make_cut_model()
+        algorithm.setup_main = MagicMock()
+        algorithm.set_up_mip_solver = MagicMock(return_value={})
         optimal_results = SimpleNamespace(
             solution=[object()],
             solver=SimpleNamespace(termination_condition=tc.optimal),
             problem=SimpleNamespace(),
         )
-        pool_algorithm.mip_opt = FakePersistentSolver(solve_result=optimal_results)
-        pool_algorithm.mip_opt._solver_model = 'solver-model'
-        pool_algorithm.mip_opt._pyomo_var_to_solver_var_map = 'var-map'
+        algorithm.mip_opt = FakePersistentSolver(solve_result=optimal_results)
+        algorithm.mip_opt._solver_model = 'solver-model'
+        algorithm.mip_opt._pyomo_var_to_solver_var_map = 'var-map'
         with (
-            patch.object(pool_algorithm, 'update_suboptimal_dual_bound') as update_dual,
-            patch.object(pool_algorithm.mip.solutions, 'load_from') as load_from,
+            patch.object(algorithm, 'update_suboptimal_dual_bound') as update_dual,
+            patch.object(algorithm.mip.solutions, 'load_from') as load_from,
             patch.object(algorithm_base_class, 'update_solver_timelimit'),
             patch.object(algorithm_base_class, 'PersistentSolver', FakePersistentBase),
         ):
-            _, pool_results = pool_algorithm.solve_main()
+            _, pool_results = algorithm.solve_main()
         self.assertEqual(pool_results._solver_model, 'solver-model')
         self.assertEqual(pool_results._pyomo_var_to_solver_var_map, 'var-map')
         update_dual.assert_called_once_with(optimal_results)
         load_from.assert_called_once_with(optimal_results)
 
+    def test_solve_main_and_fp_main_distinguish_infeasible_or_unbounded(self):
         distinguish_algorithm = make_algorithm()
         distinguish_algorithm.config = make_config()
         distinguish_algorithm.mip = make_cut_model()
@@ -1143,9 +1184,10 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             fp_algorithm.solve_fp_main()
         distinguish.assert_called_once()
 
-        handler_algorithm = make_algorithm()
-        handler_algorithm.config = make_config()
-        handler_algorithm.fixed_nlp = make_cut_model()
+    def test_handle_main_optimal_sets_missing_binary_values(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
+        algorithm.fixed_nlp = make_cut_model()
         main_mip = make_cut_model()
         main_mip.y.set_value(None, skip_validation=True)
         main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
@@ -1155,38 +1197,37 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                 algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
             ),
         ):
-            handler_algorithm.handle_main_optimal(main_mip, update_bound=False)
+            algorithm.handle_main_optimal(main_mip, update_bound=False)
         self.assertEqual(main_mip.y.value, 0)
 
-        unbounded_algorithm = make_algorithm()
-        unbounded_algorithm.config = make_config()
-        unbounded_algorithm.fixed_nlp = make_cut_model()
-        unbounded_algorithm.mip = make_cut_model()
-        unbounded_algorithm.primal_bound = 10.0
-        unbounded_algorithm.dual_bound = 5.0
-        unbounded_algorithm.rel_gap = 0.5
-        unbounded_algorithm.mip_iter = 1
-        unbounded_algorithm.termination_condition_log_formatter = (
-            '{0}{1}{2}{3}{4}{5}{6}'
-        )
-        unbounded_algorithm.mip_opt = FakePersistentSolver(
+    def test_handle_main_unbounded_loads_solution_with_persistent_solver(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config()
+        algorithm.fixed_nlp = make_cut_model()
+        algorithm.mip = make_cut_model()
+        algorithm.primal_bound = 10.0
+        algorithm.dual_bound = 5.0
+        algorithm.rel_gap = 0.5
+        algorithm.mip_iter = 1
+        algorithm.termination_condition_log_formatter = '{0}{1}{2}{3}{4}{5}{6}'
+        algorithm.mip_opt = FakePersistentSolver(
             solve_result=SimpleNamespace(
                 solution=[object()],
                 solver=SimpleNamespace(termination_condition=tc.optimal),
             )
         )
-        unbounded_algorithm.timing = {}
+        algorithm.timing = {}
         main_mip = make_cut_model()
         main_mip.MindtPy_utils.mip_obj = Objective(expr=main_mip.x)
         with (
-            patch.object(unbounded_algorithm.mip.solutions, 'load_from') as load_from,
+            patch.object(algorithm.mip.solutions, 'load_from') as load_from,
             patch.object(algorithm_base_class, 'update_solver_timelimit'),
             patch.object(algorithm_base_class, 'PersistentSolver', FakePersistentBase),
             patch.object(
                 algorithm_base_class, 'get_main_elapsed_time', return_value=1.0
             ),
         ):
-            unbounded_algorithm.handle_main_unbounded(main_mip)
+            algorithm.handle_main_unbounded(main_mip)
         load_from.assert_called_once()
 
     def test_regularization_setup_and_handlers(self):
