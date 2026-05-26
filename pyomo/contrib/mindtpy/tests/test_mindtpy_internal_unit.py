@@ -380,6 +380,29 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     algorithm.check_subsolver_validity()
 
+    def test_check_subsolver_validity_allows_baron_demo_license(self):
+        algorithm = make_algorithm()
+        algorithm.config = make_config(nlp_solver='baron')
+        algorithm.mip_opt = FakeSolver()
+        algorithm.nlp_opt = FakeSolver(licensed=False)
+        with self.assertRaisesRegex(ValueError, 'baron is not licensed'):
+            algorithm.check_subsolver_validity()
+
+        algorithm.config = make_config(
+            nlp_solver='baron', allow_baron_demo_license=True
+        )
+        algorithm.mip_opt = FakeSolver()
+        algorithm.nlp_opt = FakeSolver(licensed=False)
+        algorithm.check_subsolver_validity()
+
+        algorithm.config = make_config(
+            nlp_solver='ipopt', allow_baron_demo_license=True
+        )
+        algorithm.mip_opt = FakeSolver()
+        algorithm.nlp_opt = FakeSolver(licensed=False)
+        with self.assertRaisesRegex(ValueError, 'ipopt is not licensed'):
+            algorithm.check_subsolver_validity()
+
     def test_check_config_covers_baron_gams_and_tabu_adjustments(self):
         baron_algorithm = make_algorithm()
         baron_algorithm.config = make_config(

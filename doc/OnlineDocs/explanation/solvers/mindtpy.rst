@@ -289,6 +289,11 @@ A usage example for GOA is as follows:
   >>> model.objective.display()
 
 
+When using BARON without a full license, MindtPy treats BARON as unlicensed
+by default. For small models that fit within BARON's free/demo limits, users
+can opt in with ``allow_baron_demo_license=True``. Larger models may fail in
+BARON.
+
 
 MindtPy Implementation and Optional Arguments
 ---------------------------------------------

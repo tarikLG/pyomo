@@ -2373,7 +2373,16 @@ class _MindtPyAlgorithm:
         if not self.nlp_opt.available():
             raise ValueError(self.config.nlp_solver + ' is not available.')
         if not self.nlp_opt.license_is_valid():
-            raise ValueError(self.config.nlp_solver + ' is not licensed.')
+            if not (
+                self.config.nlp_solver == 'baron'
+                and self.config.allow_baron_demo_license
+            ):
+                raise ValueError(self.config.nlp_solver + ' is not licensed.')
+            self.config.logger.warning(
+                "BARON full license was not detected; continuing because "
+                "allow_baron_demo_license=True. The solve may fail if the model "
+                "exceeds BARON's free/demo limits."
+            )
         if self.config.add_regularization is not None:
             if not self.regularization_mip_opt.available():
                 raise ValueError(
