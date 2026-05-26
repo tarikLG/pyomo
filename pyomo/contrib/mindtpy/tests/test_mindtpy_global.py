@@ -11,6 +11,7 @@
 """Tests for the MindtPy solver."""
 
 import math
+from unittest.mock import patch
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mcpp import pyomo_mcpp
 from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
@@ -18,9 +19,10 @@ from pyomo.contrib.mindtpy.tests.nonconvex1 import Nonconvex1
 from pyomo.contrib.mindtpy.tests.nonconvex2 import Nonconvex2
 from pyomo.contrib.mindtpy.tests.nonconvex3 import Nonconvex3
 from pyomo.contrib.mindtpy.tests.nonconvex4 import Nonconvex4
-from pyomo.environ import ConstraintList
-from pyomo.environ import SolverFactory, minimize, value
+from pyomo.environ import Binary, ConcreteModel, Constraint, ConstraintList, Objective
+from pyomo.environ import SolverFactory, Var, minimize, value
 from pyomo.opt import TerminationCondition
+from pyomo.solvers.plugins.solvers.BARON import BARONSHELL
 
 required_solvers = ('baron', 'cplex_persistent')
 if not all(SolverFactory(s).available(exception_flag=False) for s in required_solvers):
@@ -32,6 +34,11 @@ else:
 
 mcpp_available = pyomo_mcpp.mcpp_available()
 goa_test_requirements_available = subsolvers_available and mcpp_available
+baron_demo_goa_test_requirements_available = (
+    SolverFactory('baron').available(exception_flag=False)
+    and SolverFactory('cplex_persistent').available(exception_flag=False)
+    and mcpp_available
+)
 
 model_list = [
     EightProcessFlowsheet(convex=False),
@@ -40,6 +47,46 @@ model_list = [
     Nonconvex3(),
     Nonconvex4(),
 ]
+
+
+def make_baron_demo_size_model():
+    model = ConcreteModel()
+    model.x = Var(bounds=(0, 2), initialize=0.5)
+    model.y = Var(domain=Binary, initialize=0)
+    model.objective = Objective(expr=(model.x - 1) ** 2 + model.y)
+    model.c = Constraint(expr=model.x >= 0.25 + 0.5 * model.y)
+    return model
+
+
+@unittest.skipIf(
+    not baron_demo_goa_test_requirements_available,
+    'BARON demo GOA integration test requirements are not available',
+)
+class TestMindtPyFreeBaron(unittest.TestCase):
+    """Small GOA smoke test that fits within BARON's free solver limits."""
+
+    def test_GOA_with_baron_free_size_model(self):
+        model = make_baron_demo_size_model()
+
+        # Pyomo's BARON license check intentionally uses an 11-variable model,
+        # which detects a full license and rejects BARON's free/demo mode. This
+        # test keeps the actual solve within the free-mode size limits and only
+        # bypasses that full-license guard for the local MindtPy solve.
+        with patch.object(BARONSHELL, 'license_is_valid', return_value=True):
+            with SolverFactory('mindtpy') as opt:
+                results = opt.solve(
+                    model,
+                    strategy='GOA',
+                    mip_solver='cplex_persistent',
+                    nlp_solver='baron',
+                )
+
+        self.assertEqual(
+            results.solver.termination_condition, TerminationCondition.optimal
+        )
+        self.assertAlmostEqual(value(model.x), 1.0, places=5)
+        self.assertAlmostEqual(value(model.y), 0.0, places=5)
+        self.assertAlmostEqual(value(model.objective.expr), 0.0, places=5)
 
 
 @unittest.skipIf(
