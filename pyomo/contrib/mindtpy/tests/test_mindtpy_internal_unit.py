@@ -330,8 +330,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
     def test_check_subsolver_validity_reports_availability_and_license_failures(self):
         algorithm = make_algorithm()
         algorithm.config = make_config(
-            add_regularization='level_L1',
-            mip_regularization_solver='cplex_persistent',
+            add_regularization='level_L1', mip_regularization_solver='cplex_persistent'
         )
 
         error_cases = [
@@ -390,9 +389,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertFalse(baron_algorithm.config.equality_relaxation)
 
         gams_algorithm = make_algorithm()
-        gams_algorithm.config = make_config(
-            nlp_solver='gams', equality_relaxation=True
-        )
+        gams_algorithm.config = make_config(nlp_solver='gams', equality_relaxation=True)
         gams_algorithm.config.nlp_solver_args['solver'] = 'baron'
         gams_algorithm.check_config()
         self.assertFalse(gams_algorithm.config.equality_relaxation)
@@ -531,9 +528,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                 init_algorithm.MindtPy_initialization()
 
     def test_init_rnlp_updates_suboptimal_bound_for_feasible_termination(self):
-        feasible_algorithm = self._make_rnlp_algorithm(
-            tc.feasible, 'suboptimal rNLP'
-        )
+        feasible_algorithm = self._make_rnlp_algorithm(tc.feasible, 'suboptimal rNLP')
         fake_transform = SimpleNamespace(apply_to=MagicMock())
         with (
             patch.object(
@@ -625,8 +620,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             ),
             patch.object(algorithm_base_class, 'copy_var_list_values') as copy_values,
             patch(
-                'pyomo.core.base.PyomoModel.ModelSolutions.load_from',
-                return_value=None,
+                'pyomo.core.base.PyomoModel.ModelSolutions.load_from', return_value=None
             ),
         ):
             optimal_algorithm.init_max_binaries()
@@ -651,9 +645,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                     ),
                 )
             )
-            with (
-                patch.object(algorithm_base_class, 'update_solver_timelimit'),
-            ):
+            with (patch.object(algorithm_base_class, 'update_solver_timelimit'),):
                 with self.subTest(termination=termination):
                     with self.assertRaisesRegex(ValueError, message):
                         algorithm.init_max_binaries()
@@ -1121,9 +1113,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             main_mip, main_results = algorithm.solve_main()
         self.assertIsNone(main_mip)
         self.assertIsNone(main_results)
-        self.assertIs(
-            algorithm.results.solver.termination_condition, tc.maxTimeLimit
-        )
+        self.assertIs(algorithm.results.solver.termination_condition, tc.maxTimeLimit)
 
     def test_solve_main_solution_pool_preserves_solver_artifacts(self):
         algorithm = make_algorithm()
@@ -1474,15 +1464,15 @@ class TestAlgorithmBaseClass(unittest.TestCase):
 
     def test_iteration_loop_covers_single_tree_regularization_path(self):
         algorithm = make_algorithm()
-        algorithm.config = make_config(
-            single_tree=True, add_regularization='level_L1'
-        )
+        algorithm.config = make_config(single_tree=True, add_regularization='level_L1')
         algorithm.config.iteration_limit = 1
         algorithm.timing = {}
         algorithm.mip = make_cut_model()
         algorithm.fixed_nlp = make_cut_model()
         algorithm.integer_list = []
-        algorithm.solve_main = MagicMock(return_value=(make_cut_model(), make_results()))
+        algorithm.solve_main = MagicMock(
+            return_value=(make_cut_model(), make_results())
+        )
         algorithm.handle_main_mip_termination = MagicMock(side_effect=[False, True])
         algorithm.add_regularization = MagicMock()
         algorithm.solve_subproblem = MagicMock(
@@ -1521,8 +1511,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
             return_value=(
                 make_cut_model(),
                 SimpleNamespace(
-                    _solver_model='solver-model',
-                    _pyomo_var_to_solver_var_map='var-map',
+                    _solver_model='solver-model', _pyomo_var_to_solver_var_map='var-map'
                 ),
             )
         )
@@ -1546,9 +1535,7 @@ class TestAlgorithmBaseClass(unittest.TestCase):
                 algorithm_base_class, 'copy_var_list_values_from_solution_pool'
             ) as copy_from_solution_pool,
             patch.object(
-                algorithm_base_class,
-                'get_integer_solution',
-                side_effect=[(1,), (2,)],
+                algorithm_base_class, 'get_integer_solution', side_effect=[(1,), (2,)]
             ),
         ):
             algorithm.MindtPy_iteration_loop()
@@ -1556,12 +1543,8 @@ class TestAlgorithmBaseClass(unittest.TestCase):
         self.assertEqual(copy_from_solution_pool.call_count, 2)
         self.assertEqual(algorithm.solve_subproblem.call_count, 2)
         self.assertEqual(algorithm.handle_nlp_subproblem_tc.call_count, 2)
-        self.assertEqual(
-            algorithm.config.call_before_subproblem_solve.call_count, 2
-        )
-        self.assertEqual(
-            algorithm.config.call_after_subproblem_solve.call_count, 2
-        )
+        self.assertEqual(algorithm.config.call_before_subproblem_solve.call_count, 2)
+        self.assertEqual(algorithm.config.call_after_subproblem_solve.call_count, 2)
         self.assertEqual(algorithm.integer_list, [(1,), (2,)])
         self.assertTrue(algorithm.last_iter_cuts)
 
@@ -1872,16 +1855,14 @@ class TestCutGeneration(unittest.TestCase):
         jacobians_model = SimpleNamespace(
             MindtPy_utils=SimpleNamespace(grey_box_list=[jacobian_model]),
             dual={
-                jacobian_model: {grey_output.name.replace('outputs', 'output_constraints'): 2.0}
+                jacobian_model: {
+                    grey_output.name.replace('outputs', 'output_constraints'): 2.0
+                }
             },
         )
 
         cut_generation.add_oa_cuts_for_grey_box(
-            target_model,
-            jacobians_model,
-            make_config(add_slack=True),
-            minimize,
-            0,
+            target_model, jacobians_model, make_config(add_slack=True), minimize, 0
         )
         self.assertEqual(len(target_model.MindtPy_utils.cuts.oa_cuts), 1)
         self.assertEqual(len(target_model.MindtPy_utils.cuts.slack_vars), 1)
