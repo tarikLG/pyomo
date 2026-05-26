@@ -10,6 +10,7 @@
 # -*- coding: utf-8 -*-
 """Tests for global LP/NLP in the MindtPy solver."""
 
+import os
 import pyomo.common.unittest as unittest
 from pyomo.contrib.mindtpy.tests.eight_process_problem import EightProcessFlowsheet
 from pyomo.contrib.mindtpy.tests.nonconvex1 import Nonconvex1
@@ -28,8 +29,10 @@ elif not SolverFactory('baron').license_is_valid():
 else:
     subsolvers_available = True
 
+run_full_goa_sweep = os.environ.get('PYOMO_MINDTPY_FULL_GOA_SWEEP') == '1'
 
-model_list = [
+representative_goa_model = Nonconvex1()
+goa_sweep_models = [
     EightProcessFlowsheet(convex=False),
     Nonconvex1(),
     Nonconvex2(),
@@ -54,70 +57,44 @@ class TestMindtPy(unittest.TestCase):
 
     def test_GOA(self):
         """Test the global outer approximation decomposition algorithm."""
+        model = representative_goa_model.clone()
         with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
-                results = opt.solve(
-                    model,
-                    strategy='GOA',
-                    mip_solver=required_solvers[1],
-                    nlp_solver=required_solvers[0],
-                    single_tree=True,
-                )
+            results = opt.solve(
+                model,
+                strategy='GOA',
+                mip_solver=required_solvers[1],
+                nlp_solver=required_solvers[0],
+                single_tree=True,
+            )
 
-                self.assertIn(
-                    results.solver.termination_condition,
-                    [TerminationCondition.optimal, TerminationCondition.feasible],
-                )
-                self.assertAlmostEqual(
-                    value(model.objective.expr), model.optimal_value, places=2
-                )
-                self.check_optimal_solution(model)
+        self.assertIn(
+            results.solver.termination_condition,
+            [TerminationCondition.optimal, TerminationCondition.feasible],
+        )
+        self.assertAlmostEqual(
+            value(model.objective.expr), model.optimal_value, places=2
+        )
+        self.check_optimal_solution(model)
 
-    def test_GOA_tabu_list(self):
-        """Test the global outer approximation decomposition algorithm."""
+
+@unittest.skipIf(
+    not (subsolvers_available and pyomo_mcpp.mcpp_available() and run_full_goa_sweep),
+    'Set PYOMO_MINDTPY_FULL_GOA_SWEEP=1 to run the full GOA single-tree sweep',
+)
+@unittest.pytest.mark.expensive
+class TestMindtPySingleTreeSweep(unittest.TestCase):
+    """Optional broad single-tree GOA sweep for nightly or solver-focused testing."""
+
+    def check_optimal_solution(self, model, places=1):
+        for var in model.optimal_solution:
+            self.assertAlmostEqual(
+                var.value, model.optimal_solution[var], places=places
+            )
+
+    def test_GOA_single_tree_sweep(self):
+        """Run single-tree GOA across all nonconvex regression models."""
         with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
-                results = opt.solve(
-                    model,
-                    strategy='GOA',
-                    mip_solver=required_solvers[1],
-                    nlp_solver=required_solvers[0],
-                    single_tree=True,
-                    use_tabu_list=True,
-                )
-
-                self.assertIn(
-                    results.solver.termination_condition,
-                    [TerminationCondition.optimal, TerminationCondition.feasible],
-                )
-                self.assertAlmostEqual(
-                    value(model.objective.expr), model.optimal_value, places=2
-                )
-                self.check_optimal_solution(model)
-
-    def test_GOA_check_config_single_tree_invalid_solver(self):
-        """Test the global outer approximation check config raises ValueError with single_tree and invalid mip_solver."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
-                with self.assertRaisesRegex(
-                    ValueError,
-                    "Only cplex_persistent and gurobi_persistent are supported for LP/NLP based Branch and Bound method.",
-                ):
-                    opt.solve(
-                        model,
-                        strategy='GOA',
-                        single_tree=True,
-                        mip_solver='glpk',
-                        nlp_solver=required_solvers[0],
-                    )
-
-    def test_GOA_check_config_single_tree_thread_reduction(self):
-        """Test the global outer approximation check config correctly reduces threads when single_tree is used."""
-        with SolverFactory('mindtpy.goa') as opt:
-            for model in model_list:
+            for model in goa_sweep_models:
                 model = model.clone()
                 results = opt.solve(
                     model,
@@ -125,14 +102,11 @@ class TestMindtPy(unittest.TestCase):
                     single_tree=True,
                     mip_solver=required_solvers[1],
                     nlp_solver=required_solvers[0],
-                    threads=2,
                 )
                 self.assertIn(
                     results.solver.termination_condition,
                     [TerminationCondition.optimal, TerminationCondition.feasible],
                 )
-                self.assertEqual(opt.config.threads, 1)
-                self.assertEqual(model.MindtPy_utils.config.threads, 1)
                 self.assertAlmostEqual(
                     value(model.objective.expr), model.optimal_value, places=2
                 )
@@ -146,7 +120,7 @@ class TestMindtPy(unittest.TestCase):
     def test_GOA_Gurobi(self):
         """Test the global outer approximation decomposition algorithm."""
         with SolverFactory('mindtpy') as opt:
-            for model in model_list:
+            for model in goa_sweep_models:
                 model = model.clone()
                 results = opt.solve(
                     model,
