@@ -542,6 +542,17 @@ def _add_subsolver_configs(CONFIG):
         ),
     )
     CONFIG.declare(
+        'allow_baron_demo_license',
+        ConfigValue(
+            default=False,
+            domain=bool,
+            description='Allow BARON to run in free/demo mode',
+            doc='Allow MindtPy to call BARON when Pyomo does not detect a full '
+            'BARON license. This is only suitable for models that fit within '
+            "BARON's free/demo limits.",
+        ),
+    )
+    CONFIG.declare(
         'mip_solver',
         ConfigValue(
             default='glpk',

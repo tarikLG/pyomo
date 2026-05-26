@@ -13,7 +13,7 @@ from pyomo.contrib.mindtpy.cut_generation import add_oa_cuts, add_no_good_cuts
 from pyomo.contrib.mcpp.pyomo_mcpp import McCormick as mc, MCPP_Error
 from pyomo.repn import generate_standard_repn
 import pyomo.core.expr as EXPR
-from math import copysign
+from math import copysign, isfinite
 from pyomo.contrib.mindtpy.util import (
     get_integer_solution,
     copy_var_list_values,
@@ -281,13 +281,13 @@ class LazyOACallback_cplex(
                 convex_cut_valid = True
                 for var in vars_in_constr:
                     if not var.fixed:
-                        if ccSlope[var] == float('nan') or ccSlope[var] == float('inf'):
+                        if not isfinite(ccSlope[var]):
                             concave_cut_valid = False
-                        if cvSlope[var] == float('nan') or cvSlope[var] == float('inf'):
+                        if not isfinite(cvSlope[var]):
                             convex_cut_valid = False
-                if ccStart == float('nan') or ccStart == float('inf'):
+                if not isfinite(ccStart):
                     concave_cut_valid = False
-                if cvStart == float('nan') or cvStart == float('inf'):
+                if not isfinite(cvStart):
                     convex_cut_valid = False
                 # check if the value of ccSlope and cvSlope all equals zero. if so, we skip this.
                 if not any(ccSlope.values()):

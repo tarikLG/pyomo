@@ -9,7 +9,7 @@
 
 """Cut generation."""
 
-from math import copysign
+from math import copysign, isfinite
 from pyomo.core import minimize, value
 import pyomo.core.expr as EXPR
 from pyomo.contrib.gdpopt.util import time_code
@@ -441,18 +441,18 @@ def add_affine_cuts(target_model, config, timing):
             convex_cut_valid = True
             for var in vars_in_constr:
                 if not var.fixed:
-                    if ccSlope[var] == float('nan') or ccSlope[var] == float('inf'):
+                    if not isfinite(ccSlope[var]):
                         concave_cut_valid = False
-                    if cvSlope[var] == float('nan') or cvSlope[var] == float('inf'):
+                    if not isfinite(cvSlope[var]):
                         convex_cut_valid = False
             # check if the value of ccSlope and cvSlope all equals zero. if so, we skip this.
             if not any(list(ccSlope.values())):
                 concave_cut_valid = False
             if not any(list(cvSlope.values())):
                 convex_cut_valid = False
-            if ccStart == float('nan') or ccStart == float('inf'):
+            if not isfinite(ccStart):
                 concave_cut_valid = False
-            if cvStart == float('nan') or cvStart == float('inf'):
+            if not isfinite(cvStart):
                 convex_cut_valid = False
             if not (concave_cut_valid or convex_cut_valid):
                 continue
