@@ -1988,7 +1988,7 @@ class TestCutGeneration(unittest.TestCase):
         cut_generation.add_affine_cuts(missing_value_model, make_config(), {})
         self.assertEqual(len(missing_value_model.MindtPy_utils.cuts.aff_cuts), 0)
 
-    def test_add_affine_cuts_keeps_concave_side_when_convex_slope_is_nan(self):
+    def test_add_affine_cuts_keeps_convex_side_when_concave_slope_is_nan(self):
         nan_model = make_cut_model(include_binary=False, upper=2.0)
 
         class NaNMcCormick:
@@ -2015,9 +2015,12 @@ class TestCutGeneration(unittest.TestCase):
 
         with patch.object(cut_generation, 'mc', NaNMcCormick):
             cut_generation.add_affine_cuts(nan_model, make_config(), {})
-        self.assertEqual(len(nan_model.MindtPy_utils.cuts.aff_cuts), 1)
+        aff_cuts = nan_model.MindtPy_utils.cuts.aff_cuts
+        self.assertEqual(len(aff_cuts), 1)
+        self.assertTrue(aff_cuts[1].has_ub())
+        self.assertFalse(aff_cuts[1].has_lb())
 
-    def test_add_affine_cuts_keeps_convex_side_when_concave_slope_is_nan(self):
+    def test_add_affine_cuts_keeps_concave_side_when_convex_slope_is_nan(self):
         nan_convex_model = make_cut_model(include_binary=False, upper=2.0)
 
         class NaNConvexMcCormick:
@@ -2048,7 +2051,10 @@ class TestCutGeneration(unittest.TestCase):
 
         with patch.object(cut_generation, 'mc', NaNConvexMcCormick):
             cut_generation.add_affine_cuts(nan_convex_model, make_config(), {})
-        self.assertEqual(len(nan_convex_model.MindtPy_utils.cuts.aff_cuts), 1)
+        aff_cuts = nan_convex_model.MindtPy_utils.cuts.aff_cuts
+        self.assertEqual(len(aff_cuts), 1)
+        self.assertTrue(aff_cuts[1].has_lb())
+        self.assertFalse(aff_cuts[1].has_ub())
 
     def test_add_affine_cuts_skips_nonfinite_or_zero_mccormick_data(self):
         invalid_model = make_cut_model(include_binary=False, upper=2.0)

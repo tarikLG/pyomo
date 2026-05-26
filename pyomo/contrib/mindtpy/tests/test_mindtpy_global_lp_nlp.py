@@ -116,7 +116,7 @@ class TestMindtPy(unittest.TestCase):
 
     def test_GOA_check_config_single_tree_thread_reduction(self):
         """Test the global outer approximation check config correctly reduces threads when single_tree is used."""
-        with SolverFactory('mindtpy') as opt:
+        with SolverFactory('mindtpy.goa') as opt:
             for model in model_list:
                 model = model.clone()
                 results = opt.solve(

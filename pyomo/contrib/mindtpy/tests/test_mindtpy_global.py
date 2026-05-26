@@ -124,9 +124,9 @@ class TestMindtPy(unittest.TestCase):
 
     def test_GOA_deactivate_no_good_cuts_when_fixing_bound(self):
         """Test deactivate_no_good_cuts_when_fixing_bound on a model by invoking the method logic to verify cut enhancements."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
+        for model in model_list:
+            model = model.clone()
+            with SolverFactory('mindtpy.goa') as opt:
                 opt.solve(
                     model,
                     strategy='GOA',
@@ -155,7 +155,7 @@ class TestMindtPy(unittest.TestCase):
                 opt.config.add_no_good_cuts = True
                 opt.config.use_tabu_list = True
                 cut_keys = list(no_good_cuts.keys())
-                opt.integer_list = cut_keys.copy()
+                opt.integer_list = [(i,) for i in range(len(cut_keys))]
 
                 opt.deactivate_no_good_cuts_when_fixing_bound(no_good_cuts)
 
@@ -176,7 +176,7 @@ class TestMindtPy(unittest.TestCase):
         """Assert GOA initializes affine-cut structure using one normal solve per model."""
         for model in model_list:
             model = model.clone()
-            with SolverFactory('mindtpy') as opt:
+            with SolverFactory('mindtpy.goa') as opt:
                 results = opt.solve(
                     model,
                     strategy='GOA',
@@ -218,7 +218,7 @@ class TestMindtPy(unittest.TestCase):
         """Assert GOA records primal-bound progress and consistent timing traces."""
         for model in model_list:
             model = model.clone()
-            with SolverFactory('mindtpy') as opt:
+            with SolverFactory('mindtpy.goa') as opt:
                 results = opt.solve(
                     model,
                     strategy='GOA',
@@ -260,7 +260,7 @@ class TestMindtPy(unittest.TestCase):
         """Assert GOA no-improvement update does not alter no-good-cut bookkeeping."""
         for model in model_list:
             model = model.clone()
-            with SolverFactory('mindtpy') as opt:
+            with SolverFactory('mindtpy.goa') as opt:
                 results = opt.solve(
                     model,
                     strategy='GOA',
@@ -296,9 +296,9 @@ class TestMindtPy(unittest.TestCase):
 
     def test_GOA_deactivate_no_good_cuts_keyerror_path(self):
         """Assert missing primal-bound key is handled without mutating cut/list state."""
-        with SolverFactory('mindtpy') as opt:
-            for model in model_list:
-                model = model.clone()
+        for model in model_list:
+            model = model.clone()
+            with SolverFactory('mindtpy.goa') as opt:
                 results = opt.solve(
                     model,
                     strategy='GOA',
@@ -325,7 +325,7 @@ class TestMindtPy(unittest.TestCase):
 
                 opt.config.add_no_good_cuts = True
                 opt.config.use_tabu_list = True
-                opt.integer_list = list(no_good_cuts.keys())
+                opt.integer_list = [(i,) for i in range(len(no_good_cuts))]
                 integer_list_before = list(opt.integer_list)
 
                 # Force dictionary miss and exercise the KeyError handling branch.
